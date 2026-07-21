@@ -87,3 +87,25 @@ the workspace to regenerate `../docs/*.schema.json`, then run:
 ```
 
 and bump `version` in `package.json` before repackaging.
+
+`sync-schemas.sh` also regenerates `schemas/*.editor.schema.json` (via
+`scripts/build-editor-schemas.js`, which `npm run build`/`package` re-run
+anyway, so this step can't go stale either way). These are the files
+`jsonValidation` actually points at - VS Code's built-in JSON language
+service doesn't merge `$ref` siblings, which is how the raw schemas encode
+`PipelineCommand`'s tagged union (`{"type":"object", "properties":
+{"type":{"const":"blur"}}, "required":["type"], "$ref":"#/$defs/BlurSettings"}`).
+Left as-is, that pattern makes every command variant lose its discriminator
+in the editor: no autocomplete on `type`, and even a fully valid file gets
+flagged with a false "Matches multiple schemas when only one must validate"
+error. The generated `*.editor.schema.json` files merge just that pattern
+inline (not a full dereference - several defs are mutually recursive) so
+the editor sees a clean, disambiguated schema. The wizard is unaffected: it
+resolves `$ref` siblings itself at prompt time (`src/schema/resolve.ts`), so
+it reads the raw schemas directly.
+
+One residual limitation, inherent to VS Code's `oneOf` completion (not
+fixable via schema changes): autocomplete for the `type` **value** itself
+only appears for command variants with no required fields beyond `type`
+(e.g. `blur`, `cellpose`). Once `type` is set - however it got there -
+property completion and validation work correctly for every variant.

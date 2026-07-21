@@ -29,15 +29,15 @@
     "jsonValidation": [
       {
         "fileMatch": "*.evapipe",
-        "url": "./schemas/pipeline_template.schema.json"
+        "url": "./schemas/pipeline_template.editor.schema.json"
       },
       {
         "fileMatch": "*.evaproj",
-        "url": "./schemas/project.schema.json"
+        "url": "./schemas/project.editor.schema.json"
       },
       {
         "fileMatch": "*.evapt",
-        "url": "./schemas/project_template.schema.json"
+        "url": "./schemas/project_template.editor.schema.json"
       }
     ],
     "commands": [
@@ -87,10 +87,11 @@
     ]
   },
   "scripts": {
-    "build": "node esbuild.js",
-    "watch": "node esbuild.js --watch",
+    "schemas:build": "node scripts/build-editor-schemas.js",
+    "build": "npm run schemas:build && node esbuild.js",
+    "watch": "npm run schemas:build && node esbuild.js --watch",
     "check-types": "tsc --noEmit",
-    "vscode:prepublish": "npm run check-types && node esbuild.js --production",
+    "vscode:prepublish": "npm run schemas:build && npm run check-types && node esbuild.js --production",
     "package": "vsce package"
   },
   "devDependencies": {

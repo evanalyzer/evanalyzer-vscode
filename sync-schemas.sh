@@ -13,3 +13,9 @@ cp ../docs/project.schema.json schemas/project.schema.json
 cp ../docs/project_template.schema.json schemas/project_template.schema.json
 
 echo "Schemas synced from ../docs into ./schemas"
+
+# Regenerate the *.editor.schema.json variants used by jsonValidation. VS
+# Code's built-in JSON language service doesn't merge $ref siblings (see
+# scripts/build-editor-schemas.js for why), so these are kept alongside the
+# raw schemas rather than pointing the editor straight at ../docs output.
+node scripts/build-editor-schemas.js
