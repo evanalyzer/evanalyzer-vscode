@@ -29,3 +29,9 @@ export const PIPELINE_TEMPLATE: EvaFileType = {
   schemaFile: "pipeline_template.schema.json",
   suggestedName: "new-pipeline-template",
 };
+
+export const ALL_FILE_TYPES: EvaFileType[] = [PROJECT, PROJECT_TEMPLATE, PIPELINE_TEMPLATE];
+
+export function fileTypeForFileName(fileName: string): EvaFileType | undefined {
+  return ALL_FILE_TYPES.find((fileType) => fileName.endsWith(fileType.extension));
+}

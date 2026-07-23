@@ -33,6 +33,12 @@ async function main() {
     platform: "node",
     outfile: "dist/extension.js",
     external: ["vscode"],
+    // esbuild's node-platform default is mainFields: ["main"], which picks
+    // jsonc-parser's UMD build (a runtime require('./impl/...') pattern
+    // esbuild can't fully statically bundle -> "Cannot find module" at
+    // extension activation). Its "module" field points at a clean ESM
+    // build with no such pattern; prefer that for every package.
+    mainFields: ["module", "main"],
     logLevel: "silent",
     plugins: [watchLogPlugin],
   });

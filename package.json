@@ -88,10 +88,10 @@
   },
   "scripts": {
     "schemas:build": "node scripts/build-editor-schemas.js",
-    "build": "npm run schemas:build && node esbuild.js",
+    "build": "npm run schemas:build && node esbuild.js && node scripts/smoke-test-bundle.js",
     "watch": "npm run schemas:build && node esbuild.js --watch",
     "check-types": "tsc --noEmit",
-    "vscode:prepublish": "npm run schemas:build && npm run check-types && node esbuild.js --production",
+    "vscode:prepublish": "npm run schemas:build && npm run check-types && node esbuild.js --production && node scripts/smoke-test-bundle.js",
     "package": "vsce package"
   },
   "devDependencies": {
@@ -100,5 +100,8 @@
     "@vscode/vsce": "^2.29.0",
     "esbuild": "^0.21.5",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
   }
 }
