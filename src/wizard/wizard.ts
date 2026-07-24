@@ -236,7 +236,7 @@ async function promptObject(schema: JsonSchema, defs: Record<string, JsonSchema>
     });
     if (picked?.fastForward) {
       state.fastForward = true;
-      break;
+      continue; // re-enter the loop so the fastForward branch above actually fills the defaults in.
     }
     if (!picked || picked.key === null) {
       break;

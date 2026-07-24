@@ -2,6 +2,19 @@
 
 ## 0.2.0
 
+- Fixed "Done - fill everything else with defaults" doing nothing for
+  commands with zero required fields (e.g. `gaussianBlur`, whose
+  `kernelSize`/`sigma` are both optional-with-default): clicking that
+  choice from the optional-fields picker itself set the fast-forward flag
+  and `break`-ed out of the loop immediately, skipping the very code that
+  fills defaults in - it needed to `continue` so the loop's own
+  fast-forward branch actually ran. My first verification pass (an
+  exhaustive check across all 31 command types) missed this because it
+  only checked the *result validates*, and a command with its optional
+  fields simply absent is still valid - it doesn't check *the fields
+  actually got filled in*. Re-verified with a stricter test that checks
+  every default-bearing property is actually present: all 31 command
+  types now pass, including `gaussianBlur` specifically.
 - Simplified the wizard's zero-value fallback for numbers with no schema
   default: always `0` now, rather than falling back to the field's
   `minimum` constraint when one existed. Exhaustively verified (via a real
