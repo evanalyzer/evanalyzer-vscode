@@ -8,6 +8,7 @@ sync-schemas.sh
 src/**
 out/**
 scripts/**
+test/**
 node_modules/**
 
 tsconfig.json
