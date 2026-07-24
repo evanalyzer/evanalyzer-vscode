@@ -2,6 +2,14 @@
 
 ## 0.2.0
 
+- Fixed the append ("add at the end") **+ Add Pipeline Command** button
+  being anchored above the array - i.e. visually before the *first* item -
+  so it just looked like a second "insert before item 0" button, with
+  nothing distinctly marking "the end". Re-anchored it at the array's
+  closing bracket instead, after the last "insert before item N" button.
+  Verified against the real test file: each button now lands on the
+  expected line, and an empty pipeline's steps array correctly gets just
+  the one trailing button.
 - Fixed "Done - fill everything else with defaults" doing nothing for
   commands with zero required fields (e.g. `gaussianBlur`, whose
   `kernelSize`/`sigma` are both optional-with-default): clicking that
