@@ -76,7 +76,12 @@ export async function addPipeline(uri: vscode.Uri, arrayPath: JsonPath): Promise
   await insertArrayItem(document, arrayPath, existing.length, { meta, pipelineSteps: [] });
 }
 
-export async function addPipelineCommand(extensionPath: string, uri: vscode.Uri, arrayPath: JsonPath): Promise<void> {
+export async function addPipelineCommand(
+  extensionPath: string,
+  uri: vscode.Uri,
+  arrayPath: JsonPath,
+  insertIndex?: number
+): Promise<void> {
   const fileType = fileTypeForFileName(uri.fsPath);
   if (!fileType) {
     return;
@@ -87,6 +92,10 @@ export async function addPipelineCommand(extensionPath: string, uri: vscode.Uri,
     return;
   }
   const existing = (getNodeValue(findNodeAtLocation(tree, arrayPath) ?? tree) as unknown[]) ?? [];
+  // Undefined means "append" (the CodeLens above the array itself); a
+  // CodeLens above a specific existing item passes its index instead, to
+  // insert before that item rather than at the end.
+  const targetIndex = insertIndex ?? existing.length;
 
   const rootSchema = await loadSchema(extensionPath, fileType.schemaFile);
   const commandSchema = rootSchema.$defs.PipelineCommand;
@@ -104,5 +113,5 @@ export async function addPipelineCommand(extensionPath: string, uri: vscode.Uri,
     throw err;
   }
 
-  await insertArrayItem(document, arrayPath, existing.length, { enabled: true, command });
+  await insertArrayItem(document, arrayPath, targetIndex, { enabled: true, command });
 }

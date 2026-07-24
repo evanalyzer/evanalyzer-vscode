@@ -384,16 +384,7 @@ async function promptNumber(schema: JsonSchema, label: string, state: WizardStat
 }
 
 function zeroNumber(schema: JsonSchema): number {
-  if (typeof schema.default === "number") {
-    return schema.default;
-  }
-  if (schema.minimum !== undefined) {
-    return schema.minimum;
-  }
-  if (schema.maximum !== undefined && schema.maximum < 0) {
-    return schema.maximum;
-  }
-  return 0;
+  return typeof schema.default === "number" ? schema.default : 0;
 }
 
 async function promptBoolean(schema: JsonSchema, label: string, state: WizardState): Promise<unknown> {

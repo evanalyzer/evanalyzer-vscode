@@ -2,6 +2,17 @@
 
 ## 0.2.0
 
+- Simplified the wizard's zero-value fallback for numbers with no schema
+  default: always `0` now, rather than falling back to the field's
+  `minimum` constraint when one existed. Exhaustively verified (via a real
+  JSON Schema validator, not spot checks) that fast-forwarding every one of
+  the 31 pipeline command types still produces a fully schema-valid result
+  under this simpler rule.
+- Added an **+ Add Pipeline Command** CodeLens above every existing step,
+  not just above the array - so a command can be inserted at any position,
+  not only appended at the end. Verified against the real (now-larger) test
+  file that the count of buttons matches exactly (1 append button + 1 per
+  existing step, per pipeline).
 - Fixed the CodeLens buttons, color picker, and Quick Fix only ever
   working right after using a command (New Project..., Add Pipeline, ...)
   and going silent after any window/extension-host reload. `package.json`

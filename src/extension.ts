@@ -26,8 +26,8 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand("evanalyzer.addClass", (uri: vscode.Uri, arrayPath: JsonPath) => addClass(uri, arrayPath)),
     vscode.commands.registerCommand("evanalyzer.addPipeline", (uri: vscode.Uri, arrayPath: JsonPath) => addPipeline(uri, arrayPath)),
-    vscode.commands.registerCommand("evanalyzer.addPipelineCommand", (uri: vscode.Uri, arrayPath: JsonPath) =>
-      addPipelineCommand(context.extensionPath, uri, arrayPath)
+    vscode.commands.registerCommand("evanalyzer.addPipelineCommand", (uri: vscode.Uri, arrayPath: JsonPath, insertIndex?: number) =>
+      addPipelineCommand(context.extensionPath, uri, arrayPath, insertIndex)
     ),
     vscode.languages.registerCodeActionsProvider(
       EVA_DOCUMENT_SELECTOR,

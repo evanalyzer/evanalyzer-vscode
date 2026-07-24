@@ -2,8 +2,8 @@ import * as vscode from "vscode";
 import { applyEdits, modify } from "jsonc-parser";
 import type { JsonPath } from "../schema/schemaAtPath";
 
-/** Appends `item` to the array at `arrayPath` (index `arrayLength`) and applies the edit. */
-export async function insertArrayItem(document: vscode.TextDocument, arrayPath: JsonPath, arrayLength: number, item: unknown): Promise<void> {
+/** Inserts `item` into the array at `arrayPath` at `index` (shifting any existing item there onward) and applies the edit. */
+export async function insertArrayItem(document: vscode.TextDocument, arrayPath: JsonPath, index: number, item: unknown): Promise<void> {
   const originalText = document.getText();
   const editorConfig = vscode.workspace.getConfiguration("editor", document.uri);
   const formattingOptions = {
@@ -12,7 +12,7 @@ export async function insertArrayItem(document: vscode.TextDocument, arrayPath: 
     eol: document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n",
   };
 
-  const edits = modify(originalText, [...arrayPath, arrayLength], item, { isArrayInsertion: true, formattingOptions });
+  const edits = modify(originalText, [...arrayPath, index], item, { isArrayInsertion: true, formattingOptions });
   const newText = applyEdits(originalText, edits);
 
   const workspaceEdit = new vscode.WorkspaceEdit();

@@ -130,6 +130,19 @@
                 "command": {
                     "type": "transformRois"
                 }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "mode": "DETERMINANT",
+                    "type": "hessian"
+                }
             }
         ]
     }

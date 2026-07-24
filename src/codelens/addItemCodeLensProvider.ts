@@ -47,6 +47,9 @@ export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
           new vscode.CodeLens(range, { title: "$(add) Add Pipeline", command: "evanalyzer.addPipeline", arguments: [document.uri, arrayPath] })
         );
       } else if (key === "pipelineSteps" || key === "steps") {
+        // One above the array (append at the end) plus one above each
+        // existing item (insert before that item), so a command can be
+        // added at any position, not just appended.
         lenses.push(
           new vscode.CodeLens(range, {
             title: "$(add) Add Pipeline Command",
@@ -54,6 +57,17 @@ export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
             arguments: [document.uri, arrayPath],
           })
         );
+        for (const [index, itemNode] of (valueNode.children ?? []).entries()) {
+          const itemPosition = document.positionAt(itemNode.offset);
+          const itemRange = new vscode.Range(itemPosition, itemPosition);
+          lenses.push(
+            new vscode.CodeLens(itemRange, {
+              title: "$(add) Add Pipeline Command",
+              command: "evanalyzer.addPipelineCommand",
+              arguments: [document.uri, arrayPath, index],
+            })
+          );
+        }
       }
     });
 
