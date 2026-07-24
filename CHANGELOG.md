@@ -2,6 +2,17 @@
 
 ## 0.2.0
 
+- Added a unit test suite (`npm test`, vitest): 81 tests across schema
+  resolution/path-walking, id/color generation, the wizard's cancel and
+  fast-forward semantics (including a parametrized run across all 31
+  `PipelineCommand` variants), and the color picker / CodeLens providers.
+  Most run against the real bundled schemas rather than synthetic
+  fixtures. `vscode` is aliased to a hand-written mock (`src/test/vscode-mock.ts`)
+  covering only the APIs this extension actually calls, since it's
+  otherwise a virtual module the real extension host injects at runtime
+  and doesn't resolve at all under a plain test runner. Wired into
+  `vscode:prepublish`, so `npm run package` can't ship a build with
+  failing tests.
 - Fixed the append ("add at the end") **+ Add Pipeline Command** button
   being anchored above the array - i.e. visually before the *first* item -
   so it just looked like a second "insert before item 0" button, with

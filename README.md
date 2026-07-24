@@ -61,6 +61,37 @@ file to see validation/autocomplete.
 `npm run check-types` type-checks without emitting; `dist/` and `out/` are
 build artifacts and are gitignored.
 
+## Test
+
+```bash
+npm test           # runs once (vitest run)
+npm run test:watch # re-runs on change
+```
+
+Unit tests live next to the code they cover (`src/**/*.test.ts`), using
+[vitest](https://vitest.dev). `vscode` is a virtual module the real
+extension host injects at runtime - it doesn't resolve under a plain test
+runner at all - so `vitest.config.ts` aliases it to
+`src/test/vscode-mock.ts`, a hand-written stand-in covering only the APIs
+this extension actually calls (`window.showQuickPick`/`createInputBox`,
+`Range`/`Position`/`Uri`, `WorkspaceEdit`, `CodeActionKind`, ...), with real
+behavior where tests care about it (offset↔line/character math, `Uri.joinPath`)
+and `vi.fn()` stubs elsewhere that individual tests configure. `src/test/testDocument.ts`
+builds a fake `TextDocument` from a plain string, and
+`src/test/wizardTestHelpers.ts` provides queueable "accept this value" /
+"cancel" / "fast-forward" responders for the wizard's QuickPick/InputBox
+prompts.
+
+Most tests run against the real bundled schemas (`schemas/*.schema.json`),
+not synthetic fixtures, including a parametrized run of the wizard's
+"fill everything else with defaults" fast-forward across **all 31**
+`PipelineCommand` variants - the kind of exhaustive check that caught two
+real bugs during development (a `break`/`continue` mixup that silently
+dropped optional defaults for zero-required-field commands like
+`gaussianBlur`, and a stray `minimum`-based fallback where a flat `0` was
+wanted). `npm run vscode:prepublish` (and therefore `npm run package`) runs
+the suite, so a broken build can't be packaged.
+
 ## Package and install
 
 ```bash
