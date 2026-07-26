@@ -2,6 +2,18 @@
 
 ## 0.2.0
 
+- Fixed the release pipeline not triggering for a prerelease-style tag
+  (e.g. `0.1.0-alpha.1`): the tag-filter glob (`[0-9]+.[0-9]+.[0-9]+`) had
+  no trailing wildcard, so it only matched a bare `x.y.z` with nothing
+  after it. Added a trailing `*` (and an optional `v` prefix) so both
+  plain and prerelease tags trigger a build. Separately confirmed - by
+  reading `@vscode/vsce`'s own source - that the Marketplace itself
+  outright rejects any version with a semver prerelease component, so
+  added an explicit guard to the (still-inert) `publish-marketplace` job
+  that fails fast with a clear message rather than surfacing vsce's
+  generic error, if it's ever run against a prerelease tag. Prerelease
+  tags still build fine and still get a GitHub release either way; they
+  just can't be published to the Marketplace, by Marketplace design.
 - Added a release pipeline (`.github/workflows/release.yml`), triggered by
   pushing a plain semver tag (e.g. `git tag 0.0.2 && git push --tags`):
   stamps `package.json`'s version from the tag, fetches the three schemas

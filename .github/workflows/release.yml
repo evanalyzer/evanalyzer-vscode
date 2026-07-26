@@ -1,7 +1,8 @@
 name: Release
 
-# Triggered by pushing a plain semver tag, e.g. `git tag 0.0.2 && git push --tags`.
-# The `build` job then:
+# Triggered by pushing a version tag, e.g. `git tag 0.0.2 && git push --tags`
+# - a leading "v" and/or a prerelease suffix are both fine too (v0.0.2,
+# 0.1.0-alpha.1). The `build` job then:
 #   1. stamps package.json's version from the tag,
 #   2. fetches the three schemas from the *latest* evanalyzer/evanalyzer
 #      GitHub release (not a release asset - those schemas are just
@@ -20,7 +21,12 @@ name: Release
 
 on:
   push:
-    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+    # Matches version tags with or without a "v" prefix, and with or
+    # without a prerelease suffix (0.0.2, v0.0.2, 0.1.0-alpha.1, ...) -
+    # anything starting with a dotted x.y.z numeric prefix. Note: these are
+    # glob patterns (GitHub's tag-filter syntax), not regex - "." is literal
+    # here, not "any character", and "+" means "one or more" as usual.
+    tags: ["[0-9]+.[0-9]+.[0-9]+*", "v[0-9]+.[0-9]+.[0-9]+*"]
   workflow_dispatch:
     inputs:
       publish_to_marketplace:
@@ -45,6 +51,7 @@ jobs:
     outputs:
       vsix-path: ${{ steps.package.outputs.vsix-path }}
       evanalyzer-version: ${{ steps.schemas.outputs.evanalyzer_version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,10 +60,13 @@ jobs:
           node-version: 20 # pin explicitly - @vscode/vsce's dependencies require >=20, see CHANGELOG
 
       - name: Set package.json version from the tag
+        id: version
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
-          npm version "$TAG" --no-git-tag-version --allow-same-version
+          VERSION="${TAG#v}" # strip an optional leading "v" (v0.0.2 -> 0.0.2)
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -101,12 +111,30 @@ jobs:
   # To actually publish: Actions tab > Release > Run workflow, pick the
   # release tag from the branch/tag dropdown, check "publish to
   # marketplace".
+  #
+  # Only works for a plain x.y.z tag: the VS Marketplace rejects any
+  # version with a semver prerelease component outright ("The VS
+  # Marketplace doesn't support prerelease versions" - confirmed straight
+  # from @vscode/vsce's own source, publish.js). Alpha/rc/etc. tags like
+  # 0.1.0-alpha.1 build fine and still get a GitHub release either way;
+  # they just can't go to the Marketplace from here. The Marketplace's own
+  # separate "pre-release extension" concept (an odd-numbered minor
+  # version, or `vsce publish --pre-release`) is unrelated to git tag
+  # naming and isn't wired up by this workflow.
   publish-marketplace:
     needs: build
     if: github.event_name == 'workflow_dispatch' && inputs.publish_to_marketplace == true && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     environment: marketplace
     steps:
+      - name: Refuse to publish a prerelease version to the Marketplace
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "::error::Version '$VERSION' (from tag ${{ github.ref_name }}) has a prerelease suffix. The VS Marketplace does not accept semver prerelease versions - tag a plain x.y.z version to publish to the Marketplace. Alpha/prerelease tags still get a GitHub release from the 'build' job; they just can't be published from here."
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           name: vsix
