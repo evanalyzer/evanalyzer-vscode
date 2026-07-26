@@ -2,6 +2,34 @@
 
 ## 0.2.0
 
+- Added a release pipeline (`.github/workflows/release.yml`), triggered by
+  pushing a plain semver tag (e.g. `git tag 0.0.2 && git push --tags`):
+  stamps `package.json`'s version from the tag, fetches the three schemas
+  from the *latest* `evanalyzer/evanalyzer` GitHub release (`npm run
+  schemas:fetch-latest` - confirmed against the real repo that schemas
+  aren't published as release assets, just committed `docs/*.schema.json`
+  files, so this pulls them via `raw.githubusercontent.com` at that
+  release's tag), stamps a "schemas last synced from evanalyzer `<version>`"
+  line into `README.md` (so it ships inside the `.vsix` and shows in the
+  release notes), runs the full existing build/test/package pipeline, and
+  attaches the `.vsix` to a GitHub release for the pushed tag. Verified the
+  fetch script for real (not just written blind): it correctly pulled
+  `evanalyzer` `0.1.0-alpha.18`'s schemas, and the full test suite (all 81
+  tests) still passed against them. The workflow YAML was validated with
+  `actionlint`, including confirming it actually catches real errors
+  (tested against a deliberately broken copy) rather than silently passing
+  everything.
+- Added a second, **manual-only** job (`publish-marketplace`) for
+  publishing to the VS Code Marketplace - it never runs from a tag push,
+  only when the workflow is run by hand with its checkbox enabled, and even
+  then only if the `VSCE_PAT` repository secret has been configured (it
+  isn't yet - see the job's comment in the workflow file for setup steps,
+  including an optional GitHub Environment for a manual-approval gate).
+  Deliberately prepared but inert until that secret exists.
+- Added the extension icon (`assets/icon.png`, 615×615, wired into
+  `package.json`'s `icon` field for the Marketplace listing / Extensions
+  view). Moved out of `src/assets/` since that directory is excluded from
+  the packaged `.vsix`.
 - Added a unit test suite (`npm test`, vitest): 81 tests across schema
   resolution/path-walking, id/color generation, the wizard's cancel and
   fast-forward semantics (including a parametrized run across all 31

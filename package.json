@@ -11,6 +11,7 @@
     "type": "git",
     "url": "https://github.com/evanalyzer/evanalyzer-vscode.git"
   },
+  "icon": "assets/icon.png",
   "categories": [
     "Programming Languages"
   ],
@@ -91,6 +92,7 @@
   },
   "scripts": {
     "schemas:build": "node scripts/build-editor-schemas.js",
+    "schemas:fetch-latest": "node scripts/fetch-latest-schemas.js && npm run schemas:build && node scripts/stamp-schema-version.js",
     "build": "npm run schemas:build && node esbuild.js && node scripts/smoke-test-bundle.js",
     "watch": "npm run schemas:build && node esbuild.js --watch",
     "check-types": "tsc --noEmit",

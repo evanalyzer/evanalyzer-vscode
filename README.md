@@ -8,6 +8,10 @@ VS Code extension for EVAnalyzer's three JSON-based file formats.
 | `.evaproj` | Project files            | `schemas/project.schema.json`             |
 | `.evapt`   | Project templates        | `schemas/project_template.schema.json`    |
 
+<!-- evanalyzer-schema-version:start -->
+Schemas last synced from evanalyzer version: _(set automatically by the release pipeline; run `npm run schemas:fetch-latest` to sync locally)_.
+<!-- evanalyzer-schema-version:end -->
+
 ## What it does
 
 - **Editing**: associates the three extensions with VS Code's built-in
