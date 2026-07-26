@@ -1,0 +1,121 @@
+name: Release
+
+# Triggered by pushing a plain semver tag, e.g. `git tag 0.0.2 && git push --tags`.
+# The `build` job then:
+#   1. stamps package.json's version from the tag,
+#   2. fetches the three schemas from the *latest* evanalyzer/evanalyzer
+#      GitHub release (not a release asset - those schemas are just
+#      committed files in that repo, so this pulls docs/*.schema.json at
+#      that release's tag) and stamps README.md with which version was used,
+#   3. runs the full build (schemas:build, check-types, test, esbuild,
+#      the bundle smoke test - see package.json's vscode:prepublish) via
+#      `npm run package`,
+#   4. attaches the resulting .vsix to a GitHub release for the pushed tag.
+#
+# Publishing to the VS Code Marketplace is a separate, manual-only job
+# (see `publish-marketplace` below) - it never runs from a tag push, only
+# when this workflow is run by hand with "publish to marketplace" checked,
+# and even then only if the VSCE_PAT secret has been configured. See the
+# comment on that job for what's needed before it can be used for real.
+
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      publish_to_marketplace:
+        description: >-
+          Also publish this build to the VS Code Marketplace. Only takes
+          effect when this workflow is run from a release tag (pick the tag
+          in the "Use workflow from" branch/tag selector above) and only if
+          the VSCE_PAT repository secret is set. Leave unchecked to just
+          rebuild the .vsix for a tag without publishing anywhere new.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # softprops/action-gh-release needs this to create/update the release
+    outputs:
+      vsix-path: ${{ steps.package.outputs.vsix-path }}
+      evanalyzer-version: ${{ steps.schemas.outputs.evanalyzer_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # pin explicitly - @vscode/vsce's dependencies require >=20, see CHANGELOG
+
+      - name: Set package.json version from the tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          npm version "$TAG" --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch latest evanalyzer schemas
+        id: schemas
+        run: npm run schemas:fetch-latest
+
+      - name: Build and package the extension
+        id: package
+        run: |
+          set -euo pipefail
+          npm run package
+          VSIX_PATH=$(ls ./*.vsix | head -n1)
+          echo "vsix-path=${VSIX_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload .vsix as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: ${{ steps.package.outputs.vsix-path }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.vsix-path }}
+          body: |
+            Schemas synced from evanalyzer [${{ steps.schemas.outputs.evanalyzer_version }}](https://github.com/evanalyzer/evanalyzer/releases/tag/${{ steps.schemas.outputs.evanalyzer_version }}).
+
+  # Manual-only, never runs from a tag push (see the job condition below).
+  #
+  # Before this can be used for real:
+  #   1. Create a Marketplace Personal Access Token:
+  #      https://code.visualstudio.com/api/working-with-extensions/publishing-extension#get-a-personal-access-token
+  #   2. Add it as a repository secret named VSCE_PAT (Settings > Secrets
+  #      and variables > Actions).
+  #   3. Optionally create a "marketplace" GitHub Environment (Settings >
+  #      Environments) with required reviewers, for a manual approval gate
+  #      on top of the checkbox below - this job already references that
+  #      environment name, so it's inert until you configure one.
+  #
+  # To actually publish: Actions tab > Release > Run workflow, pick the
+  # release tag from the branch/tag dropdown, check "publish to
+  # marketplace".
+  publish-marketplace:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_marketplace == true && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    environment: marketplace
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Publish to VS Code Marketplace
+        run: npx @vscode/vsce publish --packagePath ./*.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

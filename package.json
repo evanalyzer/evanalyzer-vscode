@@ -1,0 +1,115 @@
+{
+  "name": "evanalyzer-file-support",
+  "displayName": "EVAnalyzer File Support",
+  "description": "Syntax highlighting, JSON Schema validation/autocomplete, and schema-driven creation wizards for EVAnalyzer .evapipe, .evaproj, and .evapt files.",
+  "version": "0.2.0",
+  "publisher": "evanalyzer",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evanalyzer/evanalyzer-vscode.git"
+  },
+  "icon": "assets/icon.png",
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:json"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "json",
+        "extensions": [
+          ".evapipe",
+          ".evaproj",
+          ".evapt"
+        ]
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "*.evapipe",
+        "url": "./schemas/pipeline_template.editor.schema.json"
+      },
+      {
+        "fileMatch": "*.evaproj",
+        "url": "./schemas/project.editor.schema.json"
+      },
+      {
+        "fileMatch": "*.evapt",
+        "url": "./schemas/project_template.editor.schema.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "evanalyzer.newProject",
+        "title": "New EVAnalyzer Project...",
+        "category": "EVAnalyzer"
+      },
+      {
+        "command": "evanalyzer.newProjectTemplate",
+        "title": "New EVAnalyzer Project Template...",
+        "category": "EVAnalyzer"
+      },
+      {
+        "command": "evanalyzer.newPipelineTemplate",
+        "title": "New EVAnalyzer Pipeline Template...",
+        "category": "EVAnalyzer"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "submenu": "evanalyzer.newFileSubmenu",
+          "group": "navigation@1"
+        }
+      ],
+      "evanalyzer.newFileSubmenu": [
+        {
+          "command": "evanalyzer.newProject",
+          "group": "1_evanalyzer@1"
+        },
+        {
+          "command": "evanalyzer.newProjectTemplate",
+          "group": "1_evanalyzer@2"
+        },
+        {
+          "command": "evanalyzer.newPipelineTemplate",
+          "group": "1_evanalyzer@3"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "evanalyzer.newFileSubmenu",
+        "label": "New EVAnalyzer File"
+      }
+    ]
+  },
+  "scripts": {
+    "schemas:build": "node scripts/build-editor-schemas.js",
+    "schemas:fetch-latest": "node scripts/fetch-latest-schemas.js && npm run schemas:build && node scripts/stamp-schema-version.js",
+    "build": "npm run schemas:build && node esbuild.js && node scripts/smoke-test-bundle.js",
+    "watch": "npm run schemas:build && node esbuild.js --watch",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "vscode:prepublish": "npm run schemas:build && npm run check-types && npm test && node esbuild.js --production && node scripts/smoke-test-bundle.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.29.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
+  }
+}

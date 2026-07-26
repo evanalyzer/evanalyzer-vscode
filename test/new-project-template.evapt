@@ -1,0 +1,220 @@
+{
+  "meta": {
+    "name": "my file",
+    "shortDescription": "short",
+    "description": "desc",
+    "authorFirstName": "jo",
+    "authorLastName": "last",
+    "authorOrganization": "auth",
+    "creationTime": "2026-07-24T08:09:08.082Z"
+  },
+  "classification": {
+    "classes": [
+        {
+            "id": {
+                "VALID": 0
+            },
+            "color": "#d74242",
+            "name": "",
+            "notes": "",
+            "measure": {}
+        },
+        {
+            "id": {
+                "VALID": 1
+            },
+            "color": "#42d76d",
+            "name": "",
+            "notes": "",
+            "measure": {}
+        },
+        {
+            "id": {
+                "VALID": 2
+            },
+            "color": "#9942d7",
+            "name": "",
+            "notes": "",
+            "measure": {}
+        }
+    ]
+  },
+  "plate": {
+    "groupingMode": "NO_GROUPING",
+    "groupingRegex": "a",
+    "plateCols": 1,
+    "plateRows": 2,
+    "wellCols": 2,
+    "wellRows": 2,
+    "wellImageOrder": []
+  },
+"pipelines": [
+    {
+        "meta": {
+            "name": "",
+            "shortDescription": "",
+            "description": "",
+            "authorFirstName": "jo",
+            "authorLastName": "last",
+            "authorOrganization": "auth",
+            "creationTime": "2026-07-24T08:09:27.576Z"
+        },
+        "pipelineSteps": [
+            {
+                "enabled": true,
+                "command": {
+                    "threshold": 12,
+                    "edgesAreBackground": true,
+                    "type": "distanceTransform"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur",
+                    "kernelSize": 3
+                }
+            }
+        ]
+    },
+    {
+        "meta": {
+            "name": "",
+            "shortDescription": "",
+            "description": "",
+            "authorFirstName": "jo",
+            "authorLastName": "last",
+            "authorOrganization": "auth",
+            "creationTime": "2026-07-24T08:13:28.301Z"
+        },
+        "pipelineSteps": []
+    },
+    {
+        "meta": {
+            "name": "",
+            "shortDescription": "",
+            "description": "",
+            "authorFirstName": "jo",
+            "authorLastName": "last",
+            "authorOrganization": "auth",
+            "creationTime": "2026-07-24T08:13:30.013Z"
+        },
+        "pipelineSteps": [
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "radius": 0,
+                    "filterType": "MEDIAN",
+                    "type": "rankFilter"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "kernelSize": 5,
+                    "type": "laplacian"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "classifyRois"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "transformRois"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "gaussianBlur",
+                    "kernelSize": 3,
+                    "sigma": 0.3400000035762787
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "rollingBall",
+                    "ballType": "BALL",
+                    "preSmooth": false,
+                    "radius": 4
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "extractRois",
+                    "maxObjectsBeforeFail": 100000
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "type": "classifyRois",
+                    "allowEdgeTouching": true,
+                    "inputClasses": [],
+                    "matchHandling": "REMOVE_ALL_CLASSES_IF_NOT_MATCH",
+                    "maxArea": 2147483648,
+                    "maxAspectRatio": 2147483648,
+                    "maxCircularity": 1,
+                    "maxEccentricity": 1,
+                    "maxFeret": 2147483648,
+                    "maxSolidity": 1,
+                    "minArea": 0,
+                    "minAspectRatio": 0,
+                    "minCircularity": 0,
+                    "minEccentricity": 0,
+                    "minFeret": 0,
+                    "minIntersectionArea": 0,
+                    "minSolidity": 0,
+                    "originSegmentation": [],
+                    "outputClass": "UNSET",
+                    "overlappingWith": "UNSET",
+                    "sizeUnit": "nm"
+                }
+            },
+            {
+                "enabled": true,
+                "command": {
+                    "mode": "DETERMINANT",
+                    "type": "hessian"
+                }
+            }
+        ]
+    }
+]
+}
