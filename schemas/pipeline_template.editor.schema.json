@@ -152,7 +152,7 @@
         }
       }
     },
-    "ClassificationClassifyRoisClassifyMatchHandlingSettings": {
+    "ClassificationClassifyObjectsClassifyMatchHandlingSettings": {
       "type": "string",
       "enum": [
         "ADD_OUTPUT_CLASS_IF_MATCH",
@@ -167,8 +167,8 @@
         "RECLASSIFY_IF_NOT_MATCH"
       ]
     },
-    "ClassificationMathRoiRoiSetOperationSettings": {
-      "description": "Boolean set operation applied between an `input_class` ROI (\"A\") and the union of\n its overlapping `other_class` ROIs (\"B\").",
+    "ClassificationObjectMathObjectSetOperationSettings": {
+      "description": "Boolean set operation applied between an `input_class` object (\"A\") and the union of\n its overlapping `other_class` ROIs (\"B\").",
       "oneOf": [
         {
           "description": "Intersection: pixels present in both A and B. With no overlapping B, the\nresult is empty - there is nothing to keep regardless of `keep_unmatched`.",
@@ -192,11 +192,11 @@
         }
       ]
     },
-    "ClassificationTransformRoisTransformFunctionSettings": {
+    "ClassificationTransformObjectsTransformFunctionSettings": {
       "description": "Each variant carries only the parameters it actually uses, so there's no shared field whose\n meaning shifts depending on which function is selected (e.g. a \"factor\" that's a unitless\n multiplier for `Scale` but a length in `size_unit` for `SnapArea`).",
       "oneOf": [
         {
-          "description": "Scale the ROI by the given scale factor.\n\nShape keeps and center of the ROI keeps the same, it is just shrinked or expanded.",
+          "description": "Scale the object by the given scale factor.\n\nShape keeps and center of the object keeps the same, it is just shrinked or expanded.",
           "type": "object",
           "properties": {
             "factor": {
@@ -217,11 +217,11 @@
           ]
         },
         {
-          "description": "Draws a circle around the ROI which is `extra_size` bigger than the ROI's bounding box.",
+          "description": "Draws a circle around the object which is `extra_size` bigger than the object's bounding box.",
           "type": "object",
           "properties": {
             "extraSize": {
-              "description": "Size added on top of the ROI's bounding-box diameter",
+              "description": "Size added on top of the object's bounding-box diameter",
               "type": "number",
               "format": "float",
               "maximum": 65535,
@@ -247,7 +247,7 @@
           ]
         },
         {
-          "description": "Draws a circle around the ROI's bounding box, with `min_diameter` as the minimum diameter.",
+          "description": "Draws a circle around the object's bounding box, with `min_diameter` as the minimum diameter.",
           "type": "object",
           "properties": {
             "minDiameter": {
@@ -277,11 +277,11 @@
           ]
         },
         {
-          "description": "Draws a circle with exactly `diameter` as diameter around the ROI.\n\nIf `diameter` is 0, the ROI's bounding box is used as the diameter instead.",
+          "description": "Draws a circle with exactly `diameter` as diameter around the object.\n\nIf `diameter` is 0, the object's bounding box is used as the diameter instead.",
           "type": "object",
           "properties": {
             "diameter": {
-              "description": "Circle diameter (0 = use the ROI's bounding box)",
+              "description": "Circle diameter (0 = use the object's bounding box)",
               "type": "number",
               "format": "float",
               "maximum": 65535,
@@ -307,7 +307,7 @@
           ]
         },
         {
-          "description": "Replaces the ROI with the ellipse fitted to its mask.",
+          "description": "Replaces the object with the ellipse fitted to its mask.",
           "type": "object",
           "properties": {
             "scale": {
@@ -328,7 +328,7 @@
           ]
         },
         {
-          "description": "Grows the ROI outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
+          "description": "Grows the object outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
           "type": "object",
           "properties": {
             "margin": {
@@ -358,7 +358,7 @@
           ]
         },
         {
-          "description": "Shrinks the ROI inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
+          "description": "Shrinks the object inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
           "type": "object",
           "properties": {
             "margin": {
@@ -389,12 +389,12 @@
         }
       ]
     },
-    "ClassifyRoisSettings": {
+    "ClassifyObjectsSettings": {
       "description": "Classifies ROIs based on morphological and intensity features.\n\n This command applies rule-based classification logic to assign object classes\n to extracted ROIs. Classification is performed using configurable criteria\n including area, shape descriptors, and intensity statistics.",
       "type": "object",
       "properties": {
         "allowEdgeTouching": {
-          "description": "Whether ROI can touch image edge",
+          "description": "Whether object can touch image edge",
           "type": "boolean",
           "default": true
         },
@@ -584,7 +584,7 @@
               ]
             }
           ],
-          "description": "Additional criterion: the object must intersect an ROI carrying this class\n\n If unset (the default) this filter is not applied. When set, an object only\n satisfies the overall criteria if it also overlaps at least one ROI carrying this\n class by at least `min_intersection_area`. Combine with e.g.\n `RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\n or `AddOutputClassIfMatch` to tag objects that do.",
+          "description": "Additional criterion: the object must intersect an object carrying this class\n\n If unset (the default) this filter is not applied. When set, an object only\n satisfies the overall criteria if it also overlaps at least one object carrying this\n class by at least `min_intersection_area`. Combine with e.g.\n `RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\n or `AddOutputClassIfMatch` to tag objects that do.",
           "default": "UNSET"
         },
         "sizeUnit": {
@@ -593,13 +593,13 @@
             "nm",
             "px"
           ],
-          "description": "Unit to use for roi extraction",
+          "description": "Unit to use for object extraction",
           "default": "nm"
         }
       }
     },
     "ColocalizationSettings": {
-      "description": "Calculates spatial colocalization and intersections between specified object classes.\n\n This command scans the ROI cache, groups objects by their designated classes,\n and performs spatial overlap analysis. It records colocalization relationships\n between intersecting entities and can optionally generate new child ROIs representing\n the precise intersection regions.",
+      "description": "Calculates spatial colocalization and intersections between specified object classes.\n\n This command scans the object cache, groups objects by their designated classes,\n and performs spatial overlap analysis. It records colocalization relationships\n between intersecting entities and can optionally generate new child ROIs representing\n the precise intersection regions.",
       "type": "object",
       "properties": {
         "allowMultiObjectColoc": {
@@ -629,7 +629,7 @@
               ]
             }
           ],
-          "description": "Class of the overlapping area if needed\n\n If defined the overlapping coloc area is added as new ROI and labeled with this class"
+          "description": "Class of the overlapping area if needed\n\n If defined the overlapping coloc area is added as new object and labeled with this class"
         },
         "classesToColoc": {
           "description": "Theses are the classes the coloclization should be calculated for",
@@ -639,7 +639,7 @@
           }
         },
         "excludeClasses": {
-          "description": "Classes an object must NOT overlap to be considered colocalized.\n\n An object that otherwise satisfies `classes_to_coloc` is excluded entirely\n (no relation recorded, no intersection ROI created) if it also overlaps any\n object from one of these classes with at least `min_coloc_area`. Leave empty\n (the default) to disable this filter - exclusion is opt-in.\n\n Example: to find objects colocalizing with class 1 and 2 but *not* 3, set\n `classes_to_coloc: [1, 2]` and `exclude_classes: [3]`.",
+          "description": "Classes an object must NOT overlap to be considered colocalized.\n\n An object that otherwise satisfies `classes_to_coloc` is excluded entirely\n (no relation recorded, no intersection object created) if it also overlaps any\n object from one of these classes with at least `min_coloc_area`. Leave empty\n (the default) to disable this filter - exclusion is opt-in.\n\n Example: to find objects colocalizing with class 1 and 2 but *not* 3, set\n `classes_to_coloc: [1, 2]` and `exclude_classes: [3]`.",
           "type": "array",
           "default": [],
           "items": {
@@ -728,7 +728,7 @@
       "description": "Identifies and labels discrete objects within a binary or multi-class image.",
       "type": "object",
       "properties": {
-        "minSizePx": {
+        "minSize": {
           "description": "unit: px²",
           "type": "integer",
           "format": "int32",
@@ -822,8 +822,8 @@
         "equalizeHistogram"
       ]
     },
-    "ExtractRoisSettings": {
-      "description": "Represents a bounded region of interest extracted from a labeled image.\n A command to extract spatial statistics and bounding boxes from labeled objects.",
+    "ExtractObjectsSettings": {
+      "description": "Represents a bounded object extracted from a labeled image.\n A command to extract spatial statistics and bounding boxes from labeled objects.",
       "type": "object",
       "properties": {
         "maxObjectsBeforeFail": {
@@ -1639,6 +1639,144 @@
         }
       ]
     },
+    "ObjectMathSettings": {
+      "description": "Computes a boolean set operation between two object classes, object pair by\n object pair.\n\n When more than one `other_class` object overlaps a given input object, all of them\n are unioned into a single \"B\" before the operation is applied, so the result\n doesn't depend on the order they'd otherwise be combined in.",
+      "type": "object",
+      "properties": {
+        "inputClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "VALID": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "VALID"
+              ]
+            }
+          ],
+          "description": "ROIs carrying this class are the left-hand operand (\"A\").",
+          "default": "UNSET"
+        },
+        "keepUnmatched": {
+          "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\n the output (true), or drop it entirely - no output for it at all - (false).\n\n Note this is a policy override, not the literal mathematical result: e.g. for\n `And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\n still leaves A untouched rather than emitting a zero-area object.",
+          "type": "boolean",
+          "default": true
+        },
+        "minOverlapArea": {
+          "description": "Minimum overlap area before an `other_class` object is treated as a partner\n of an input object; objects overlapping less than this are ignored.",
+          "type": "number",
+          "format": "float",
+          "default": 2
+        },
+        "operation": {
+          "description": "Boolean set operation to apply",
+          "oneOf": [
+            {
+              "description": "Intersection: pixels present in both A and B. With no overlapping B, the\nresult is empty - there is nothing to keep regardless of `keep_unmatched`.",
+              "type": "string",
+              "const": "AND"
+            },
+            {
+              "description": "Union: pixels present in A or B (or both). The result can extend beyond A's\nown bounding box into B's territory.",
+              "type": "string",
+              "const": "OR"
+            },
+            {
+              "description": "Symmetric difference: pixels present in exactly one of A, B (the overlap\nitself is excluded). Like `Or`, the result can extend beyond A's bbox.",
+              "type": "string",
+              "const": "XOR"
+            },
+            {
+              "description": "Set difference: pixels in A that are NOT in B (A \\ B). The classic use case\nis deriving a cytoplasm-only region from a whole-cell mask and its nucleus.",
+              "type": "string",
+              "const": "SUBTRACT"
+            }
+          ],
+          "default": "AND"
+        },
+        "otherClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "VALID": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "VALID"
+              ]
+            }
+          ],
+          "description": "ROIs carrying this class are the right-hand operand (\"B\").",
+          "default": "UNSET"
+        },
+        "otherFilterClasses": {
+          "description": "Optional additional label filters applied to `other_class` objects.\n\n Only `other_class` objects that carry all listed classes are used.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ObjectClass"
+          }
+        },
+        "outputClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "VALID": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "VALID"
+              ]
+            }
+          ],
+          "description": "If unset, the result replaces the input object in place.\n\n If set, a new object carrying this class is created for each input object instead,\n leaving the input object untouched.",
+          "default": "UNSET"
+        },
+        "sizeUnit": {
+          "type": "string",
+          "enum": [
+            "nm",
+            "px"
+          ],
+          "description": "Size unit for `min_overlap_area`",
+          "default": "px"
+        }
+      }
+    },
     "PipelineCommand": {
       "oneOf": [
         {
@@ -1724,7 +1862,7 @@
           "type": "object",
           "properties": {
             "allowEdgeTouching": {
-              "description": "Whether ROI can touch image edge",
+              "description": "Whether object can touch image edge",
               "type": "boolean",
               "default": true
             },
@@ -1914,7 +2052,7 @@
                   ]
                 }
               ],
-              "description": "Additional criterion: the object must intersect an ROI carrying this class\n\n If unset (the default) this filter is not applied. When set, an object only\n satisfies the overall criteria if it also overlaps at least one ROI carrying this\n class by at least `min_intersection_area`. Combine with e.g.\n `RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\n or `AddOutputClassIfMatch` to tag objects that do.",
+              "description": "Additional criterion: the object must intersect an object carrying this class\n\n If unset (the default) this filter is not applied. When set, an object only\n satisfies the overall criteria if it also overlaps at least one object carrying this\n class by at least `min_intersection_area`. Combine with e.g.\n `RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\n or `AddOutputClassIfMatch` to tag objects that do.",
               "default": "UNSET"
             },
             "sizeUnit": {
@@ -1923,12 +2061,12 @@
                 "nm",
                 "px"
               ],
-              "description": "Unit to use for roi extraction",
+              "description": "Unit to use for object extraction",
               "default": "nm"
             },
             "type": {
               "type": "string",
-              "const": "classifyRois"
+              "const": "classifyObjects"
             }
           },
           "required": [
@@ -1936,7 +2074,7 @@
           ]
         },
         {
-          "description": "Calculates spatial colocalization and intersections between specified object classes.\n\n This command scans the ROI cache, groups objects by their designated classes,\n and performs spatial overlap analysis. It records colocalization relationships\n between intersecting entities and can optionally generate new child ROIs representing\n the precise intersection regions.",
+          "description": "Calculates spatial colocalization and intersections between specified object classes.\n\n This command scans the object cache, groups objects by their designated classes,\n and performs spatial overlap analysis. It records colocalization relationships\n between intersecting entities and can optionally generate new child ROIs representing\n the precise intersection regions.",
           "type": "object",
           "properties": {
             "allowMultiObjectColoc": {
@@ -1966,7 +2104,7 @@
                   ]
                 }
               ],
-              "description": "Class of the overlapping area if needed\n\n If defined the overlapping coloc area is added as new ROI and labeled with this class"
+              "description": "Class of the overlapping area if needed\n\n If defined the overlapping coloc area is added as new object and labeled with this class"
             },
             "classesToColoc": {
               "description": "Theses are the classes the coloclization should be calculated for",
@@ -1976,7 +2114,7 @@
               }
             },
             "excludeClasses": {
-              "description": "Classes an object must NOT overlap to be considered colocalized.\n\n An object that otherwise satisfies `classes_to_coloc` is excluded entirely\n (no relation recorded, no intersection ROI created) if it also overlaps any\n object from one of these classes with at least `min_coloc_area`. Leave empty\n (the default) to disable this filter - exclusion is opt-in.\n\n Example: to find objects colocalizing with class 1 and 2 but *not* 3, set\n `classes_to_coloc: [1, 2]` and `exclude_classes: [3]`.",
+              "description": "Classes an object must NOT overlap to be considered colocalized.\n\n An object that otherwise satisfies `classes_to_coloc` is excluded entirely\n (no relation recorded, no intersection object created) if it also overlaps any\n object from one of these classes with at least `min_coloc_area`. Leave empty\n (the default) to disable this filter - exclusion is opt-in.\n\n Example: to find objects colocalizing with class 1 and 2 but *not* 3, set\n `classes_to_coloc: [1, 2]` and `exclude_classes: [3]`.",
               "type": "array",
               "default": [],
               "items": {
@@ -2075,7 +2213,7 @@
           "description": "Identifies and labels discrete objects within a binary or multi-class image.",
           "type": "object",
           "properties": {
-            "minSizePx": {
+            "minSize": {
               "description": "unit: px²",
               "type": "integer",
               "format": "int32",
@@ -2197,7 +2335,7 @@
           ]
         },
         {
-          "description": "Represents a bounded region of interest extracted from a labeled image.\n A command to extract spatial statistics and bounding boxes from labeled objects.",
+          "description": "Represents a bounded object extracted from a labeled image.\n A command to extract spatial statistics and bounding boxes from labeled objects.",
           "type": "object",
           "properties": {
             "maxObjectsBeforeFail": {
@@ -2210,7 +2348,7 @@
             },
             "type": {
               "type": "string",
-              "const": "extractRois"
+              "const": "extractObjects"
             }
           },
           "required": [
@@ -2625,66 +2763,7 @@
           ]
         },
         {
-          "description": "A filter that transforms pixels based on the statistical rank of their neighbors.\n\n Rank filters are non-linear operators used for noise reduction,\n morphological operations, and feature enhancement.\n\n This algorithm sorts (ranks) all pixel values within a local neighborhood\n window and assigns a specific percentile value to the center pixel. By selecting\n different ranks, it acts as a configurable operator: the minimum rank performs\n erosion, the maximum rank performs dilation, and the median rank (50th percentile)\n provides highly effective impulse noise suppression while preserving sharp structural edges.",
-          "type": "object",
-          "properties": {
-            "filterType": {
-              "description": "The specific ranking algorithm to apply to the neighborhood.",
-              "oneOf": [
-                {
-                  "description": "Selects the middle value. Excellent for removing salt-and-pepper noise\nwhile preserving sharp edges.",
-                  "type": "string",
-                  "const": "MEDIAN"
-                },
-                {
-                  "description": "Selects the lowest intensity (Erosion). Shrinks bright regions and\nexpands dark regions.",
-                  "type": "string",
-                  "const": "MIN"
-                },
-                {
-                  "description": "Selects the highest intensity (Dilation). Expands bright regions and\nshrinks dark regions.",
-                  "type": "string",
-                  "const": "MAX"
-                },
-                {
-                  "description": "Computes the average value. Acts as a box blur, smoothing the image\nbut blurring edges.",
-                  "type": "string",
-                  "const": "MEAN"
-                },
-                {
-                  "description": "Replaces a pixel only if it deviates from the neighborhood median\nby more than the specified threshold.",
-                  "type": "object",
-                  "properties": {
-                    "OUTLIERS": {
-                      "type": "number",
-                      "format": "float"
-                    }
-                  },
-                  "additionalProperties": false,
-                  "required": [
-                    "OUTLIERS"
-                  ]
-                }
-              ]
-            },
-            "radius": {
-              "description": "The circular radius of the neighborhood to consider.\n\n A radius of 1.0 roughly corresponds to a 3x3 square, while larger\n values increase the effect's strength and computational cost.",
-              "type": "number",
-              "format": "double"
-            },
-            "type": {
-              "type": "string",
-              "const": "rankFilter"
-            }
-          },
-          "required": [
-            "radius",
-            "filterType",
-            "type"
-          ]
-        },
-        {
-          "description": "Computes a boolean set operation between two object classes, object pair by\n object pair.\n\n When more than one `other_class` object overlaps a given input ROI, all of them\n are unioned into a single \"B\" before the operation is applied, so the result\n doesn't depend on the order they'd otherwise be combined in.",
+          "description": "Computes a boolean set operation between two object classes, object pair by\n object pair.\n\n When more than one `other_class` object overlaps a given input object, all of them\n are unioned into a single \"B\" before the operation is applied, so the result\n doesn't depend on the order they'd otherwise be combined in.",
           "type": "object",
           "properties": {
             "inputClass": {
@@ -2714,12 +2793,12 @@
               "default": "UNSET"
             },
             "keepUnmatched": {
-              "description": "When an input ROI has no qualifying overlapping partner: keep it unchanged in\n the output (true), or drop it entirely - no output for it at all - (false).\n\n Note this is a policy override, not the literal mathematical result: e.g. for\n `And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\n still leaves A untouched rather than emitting a zero-area ROI.",
+              "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\n the output (true), or drop it entirely - no output for it at all - (false).\n\n Note this is a policy override, not the literal mathematical result: e.g. for\n `And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\n still leaves A untouched rather than emitting a zero-area object.",
               "type": "boolean",
               "default": true
             },
             "minOverlapArea": {
-              "description": "Minimum overlap area before an `other_class` object is treated as a partner\n of an input ROI; objects overlapping less than this are ignored.",
+              "description": "Minimum overlap area before an `other_class` object is treated as a partner\n of an input object; objects overlapping less than this are ignored.",
               "type": "number",
               "format": "float",
               "default": 2
@@ -2807,7 +2886,7 @@
                   ]
                 }
               ],
-              "description": "If unset, the result replaces the input ROI in place.\n\n If set, a new ROI carrying this class is created for each input ROI instead,\n leaving the input ROI untouched.",
+              "description": "If unset, the result replaces the input object in place.\n\n If set, a new object carrying this class is created for each input object instead,\n leaving the input object untouched.",
               "default": "UNSET"
             },
             "sizeUnit": {
@@ -2821,10 +2900,69 @@
             },
             "type": {
               "type": "string",
-              "const": "roiMath"
+              "const": "objectMath"
             }
           },
           "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A filter that transforms pixels based on the statistical rank of their neighbors.\n\n Rank filters are non-linear operators used for noise reduction,\n morphological operations, and feature enhancement.\n\n This algorithm sorts (ranks) all pixel values within a local neighborhood\n window and assigns a specific percentile value to the center pixel. By selecting\n different ranks, it acts as a configurable operator: the minimum rank performs\n erosion, the maximum rank performs dilation, and the median rank (50th percentile)\n provides highly effective impulse noise suppression while preserving sharp structural edges.",
+          "type": "object",
+          "properties": {
+            "filterType": {
+              "description": "The specific ranking algorithm to apply to the neighborhood.",
+              "oneOf": [
+                {
+                  "description": "Selects the middle value. Excellent for removing salt-and-pepper noise\nwhile preserving sharp edges.",
+                  "type": "string",
+                  "const": "MEDIAN"
+                },
+                {
+                  "description": "Selects the lowest intensity (Erosion). Shrinks bright regions and\nexpands dark regions.",
+                  "type": "string",
+                  "const": "MIN"
+                },
+                {
+                  "description": "Selects the highest intensity (Dilation). Expands bright regions and\nshrinks dark regions.",
+                  "type": "string",
+                  "const": "MAX"
+                },
+                {
+                  "description": "Computes the average value. Acts as a box blur, smoothing the image\nbut blurring edges.",
+                  "type": "string",
+                  "const": "MEAN"
+                },
+                {
+                  "description": "Replaces a pixel only if it deviates from the neighborhood median\nby more than the specified threshold.",
+                  "type": "object",
+                  "properties": {
+                    "OUTLIERS": {
+                      "type": "number",
+                      "format": "float"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "OUTLIERS"
+                  ]
+                }
+              ]
+            },
+            "radius": {
+              "description": "The circular radius of the neighborhood to consider.\n\n A radius of 1.0 roughly corresponds to a 3x3 square, while larger\n values increase the effect's strength and computational cost.",
+              "type": "number",
+              "format": "double"
+            },
+            "type": {
+              "type": "string",
+              "const": "rankFilter"
+            }
+          },
+          "required": [
+            "radius",
+            "filterType",
             "type"
           ]
         },
@@ -3007,14 +3145,14 @@
           ]
         },
         {
-          "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\n This command applies a geometric transform (scale, circle, fitted ellipse) to every ROI\n carrying `input_class`. The transformed shape keeps the original ROI's bounding-box center.\n If `output_class` is unset (or equal to `input_class`) the input ROI is replaced in place;\n otherwise a new ROI carrying `output_class` is created alongside the untouched input ROI.",
+          "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\n This command applies a geometric transform (scale, circle, fitted ellipse) to every object\n carrying `input_class`. The transformed shape keeps the original object's bounding-box center.\n If `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\n otherwise a new object carrying `output_class` is created alongside the untouched input object.",
           "type": "object",
           "properties": {
             "function": {
-              "description": "Geometric transform applied to each input ROI",
+              "description": "Geometric transform applied to each input object",
               "oneOf": [
                 {
-                  "description": "Scale the ROI by the given scale factor.\n\nShape keeps and center of the ROI keeps the same, it is just shrinked or expanded.",
+                  "description": "Scale the object by the given scale factor.\n\nShape keeps and center of the object keeps the same, it is just shrinked or expanded.",
                   "type": "object",
                   "properties": {
                     "factor": {
@@ -3035,11 +3173,11 @@
                   ]
                 },
                 {
-                  "description": "Draws a circle around the ROI which is `extra_size` bigger than the ROI's bounding box.",
+                  "description": "Draws a circle around the object which is `extra_size` bigger than the object's bounding box.",
                   "type": "object",
                   "properties": {
                     "extraSize": {
-                      "description": "Size added on top of the ROI's bounding-box diameter",
+                      "description": "Size added on top of the object's bounding-box diameter",
                       "type": "number",
                       "format": "float",
                       "maximum": 65535,
@@ -3065,7 +3203,7 @@
                   ]
                 },
                 {
-                  "description": "Draws a circle around the ROI's bounding box, with `min_diameter` as the minimum diameter.",
+                  "description": "Draws a circle around the object's bounding box, with `min_diameter` as the minimum diameter.",
                   "type": "object",
                   "properties": {
                     "minDiameter": {
@@ -3095,11 +3233,11 @@
                   ]
                 },
                 {
-                  "description": "Draws a circle with exactly `diameter` as diameter around the ROI.\n\nIf `diameter` is 0, the ROI's bounding box is used as the diameter instead.",
+                  "description": "Draws a circle with exactly `diameter` as diameter around the object.\n\nIf `diameter` is 0, the object's bounding box is used as the diameter instead.",
                   "type": "object",
                   "properties": {
                     "diameter": {
-                      "description": "Circle diameter (0 = use the ROI's bounding box)",
+                      "description": "Circle diameter (0 = use the object's bounding box)",
                       "type": "number",
                       "format": "float",
                       "maximum": 65535,
@@ -3125,7 +3263,7 @@
                   ]
                 },
                 {
-                  "description": "Replaces the ROI with the ellipse fitted to its mask.",
+                  "description": "Replaces the object with the ellipse fitted to its mask.",
                   "type": "object",
                   "properties": {
                     "scale": {
@@ -3146,7 +3284,7 @@
                   ]
                 },
                 {
-                  "description": "Grows the ROI outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
+                  "description": "Grows the object outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
                   "type": "object",
                   "properties": {
                     "margin": {
@@ -3176,7 +3314,7 @@
                   ]
                 },
                 {
-                  "description": "Shrinks the ROI inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
+                  "description": "Shrinks the object inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
                   "type": "object",
                   "properties": {
                     "margin": {
@@ -3260,12 +3398,12 @@
                   ]
                 }
               ],
-              "description": "If unset, the transformed shape replaces the input ROI in place.\n\n If set, a new ROI carrying this class is created for each transformed input ROI instead,\n leaving the input ROI untouched.",
+              "description": "If unset, the transformed shape replaces the input object in place.\n\n If set, a new object carrying this class is created for each transformed input object instead,\n leaving the input object untouched.",
               "default": "UNSET"
             },
             "type": {
               "type": "string",
-              "const": "transformRois"
+              "const": "transformObjects"
             }
           },
           "required": [
@@ -3630,7 +3768,7 @@
               "type": "object",
               "properties": {
                 "allowEdgeTouching": {
-                  "description": "Whether ROI can touch image edge",
+                  "description": "Whether object can touch image edge",
                   "type": "boolean",
                   "default": true
                 },
@@ -3820,7 +3958,7 @@
                       ]
                     }
                   ],
-                  "description": "Additional criterion: the object must intersect an ROI carrying this class\n\n If unset (the default) this filter is not applied. When set, an object only\n satisfies the overall criteria if it also overlaps at least one ROI carrying this\n class by at least `min_intersection_area`. Combine with e.g.\n `RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\n or `AddOutputClassIfMatch` to tag objects that do.",
+                  "description": "Additional criterion: the object must intersect an object carrying this class\n\n If unset (the default) this filter is not applied. When set, an object only\n satisfies the overall criteria if it also overlaps at least one object carrying this\n class by at least `min_intersection_area`. Combine with e.g.\n `RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\n or `AddOutputClassIfMatch` to tag objects that do.",
                   "default": "UNSET"
                 },
                 "sizeUnit": {
@@ -3829,12 +3967,12 @@
                     "nm",
                     "px"
                   ],
-                  "description": "Unit to use for roi extraction",
+                  "description": "Unit to use for object extraction",
                   "default": "nm"
                 },
                 "type": {
                   "type": "string",
-                  "const": "classifyRois"
+                  "const": "classifyObjects"
                 }
               },
               "required": [
@@ -3842,7 +3980,7 @@
               ]
             },
             {
-              "description": "Calculates spatial colocalization and intersections between specified object classes.\n\n This command scans the ROI cache, groups objects by their designated classes,\n and performs spatial overlap analysis. It records colocalization relationships\n between intersecting entities and can optionally generate new child ROIs representing\n the precise intersection regions.",
+              "description": "Calculates spatial colocalization and intersections between specified object classes.\n\n This command scans the object cache, groups objects by their designated classes,\n and performs spatial overlap analysis. It records colocalization relationships\n between intersecting entities and can optionally generate new child ROIs representing\n the precise intersection regions.",
               "type": "object",
               "properties": {
                 "allowMultiObjectColoc": {
@@ -3872,7 +4010,7 @@
                       ]
                     }
                   ],
-                  "description": "Class of the overlapping area if needed\n\n If defined the overlapping coloc area is added as new ROI and labeled with this class"
+                  "description": "Class of the overlapping area if needed\n\n If defined the overlapping coloc area is added as new object and labeled with this class"
                 },
                 "classesToColoc": {
                   "description": "Theses are the classes the coloclization should be calculated for",
@@ -3882,7 +4020,7 @@
                   }
                 },
                 "excludeClasses": {
-                  "description": "Classes an object must NOT overlap to be considered colocalized.\n\n An object that otherwise satisfies `classes_to_coloc` is excluded entirely\n (no relation recorded, no intersection ROI created) if it also overlaps any\n object from one of these classes with at least `min_coloc_area`. Leave empty\n (the default) to disable this filter - exclusion is opt-in.\n\n Example: to find objects colocalizing with class 1 and 2 but *not* 3, set\n `classes_to_coloc: [1, 2]` and `exclude_classes: [3]`.",
+                  "description": "Classes an object must NOT overlap to be considered colocalized.\n\n An object that otherwise satisfies `classes_to_coloc` is excluded entirely\n (no relation recorded, no intersection object created) if it also overlaps any\n object from one of these classes with at least `min_coloc_area`. Leave empty\n (the default) to disable this filter - exclusion is opt-in.\n\n Example: to find objects colocalizing with class 1 and 2 but *not* 3, set\n `classes_to_coloc: [1, 2]` and `exclude_classes: [3]`.",
                   "type": "array",
                   "default": [],
                   "items": {
@@ -3981,7 +4119,7 @@
               "description": "Identifies and labels discrete objects within a binary or multi-class image.",
               "type": "object",
               "properties": {
-                "minSizePx": {
+                "minSize": {
                   "description": "unit: px²",
                   "type": "integer",
                   "format": "int32",
@@ -4103,7 +4241,7 @@
               ]
             },
             {
-              "description": "Represents a bounded region of interest extracted from a labeled image.\n A command to extract spatial statistics and bounding boxes from labeled objects.",
+              "description": "Represents a bounded object extracted from a labeled image.\n A command to extract spatial statistics and bounding boxes from labeled objects.",
               "type": "object",
               "properties": {
                 "maxObjectsBeforeFail": {
@@ -4116,7 +4254,7 @@
                 },
                 "type": {
                   "type": "string",
-                  "const": "extractRois"
+                  "const": "extractObjects"
                 }
               },
               "required": [
@@ -4531,66 +4669,7 @@
               ]
             },
             {
-              "description": "A filter that transforms pixels based on the statistical rank of their neighbors.\n\n Rank filters are non-linear operators used for noise reduction,\n morphological operations, and feature enhancement.\n\n This algorithm sorts (ranks) all pixel values within a local neighborhood\n window and assigns a specific percentile value to the center pixel. By selecting\n different ranks, it acts as a configurable operator: the minimum rank performs\n erosion, the maximum rank performs dilation, and the median rank (50th percentile)\n provides highly effective impulse noise suppression while preserving sharp structural edges.",
-              "type": "object",
-              "properties": {
-                "filterType": {
-                  "description": "The specific ranking algorithm to apply to the neighborhood.",
-                  "oneOf": [
-                    {
-                      "description": "Selects the middle value. Excellent for removing salt-and-pepper noise\nwhile preserving sharp edges.",
-                      "type": "string",
-                      "const": "MEDIAN"
-                    },
-                    {
-                      "description": "Selects the lowest intensity (Erosion). Shrinks bright regions and\nexpands dark regions.",
-                      "type": "string",
-                      "const": "MIN"
-                    },
-                    {
-                      "description": "Selects the highest intensity (Dilation). Expands bright regions and\nshrinks dark regions.",
-                      "type": "string",
-                      "const": "MAX"
-                    },
-                    {
-                      "description": "Computes the average value. Acts as a box blur, smoothing the image\nbut blurring edges.",
-                      "type": "string",
-                      "const": "MEAN"
-                    },
-                    {
-                      "description": "Replaces a pixel only if it deviates from the neighborhood median\nby more than the specified threshold.",
-                      "type": "object",
-                      "properties": {
-                        "OUTLIERS": {
-                          "type": "number",
-                          "format": "float"
-                        }
-                      },
-                      "additionalProperties": false,
-                      "required": [
-                        "OUTLIERS"
-                      ]
-                    }
-                  ]
-                },
-                "radius": {
-                  "description": "The circular radius of the neighborhood to consider.\n\n A radius of 1.0 roughly corresponds to a 3x3 square, while larger\n values increase the effect's strength and computational cost.",
-                  "type": "number",
-                  "format": "double"
-                },
-                "type": {
-                  "type": "string",
-                  "const": "rankFilter"
-                }
-              },
-              "required": [
-                "radius",
-                "filterType",
-                "type"
-              ]
-            },
-            {
-              "description": "Computes a boolean set operation between two object classes, object pair by\n object pair.\n\n When more than one `other_class` object overlaps a given input ROI, all of them\n are unioned into a single \"B\" before the operation is applied, so the result\n doesn't depend on the order they'd otherwise be combined in.",
+              "description": "Computes a boolean set operation between two object classes, object pair by\n object pair.\n\n When more than one `other_class` object overlaps a given input object, all of them\n are unioned into a single \"B\" before the operation is applied, so the result\n doesn't depend on the order they'd otherwise be combined in.",
               "type": "object",
               "properties": {
                 "inputClass": {
@@ -4620,12 +4699,12 @@
                   "default": "UNSET"
                 },
                 "keepUnmatched": {
-                  "description": "When an input ROI has no qualifying overlapping partner: keep it unchanged in\n the output (true), or drop it entirely - no output for it at all - (false).\n\n Note this is a policy override, not the literal mathematical result: e.g. for\n `And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\n still leaves A untouched rather than emitting a zero-area ROI.",
+                  "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\n the output (true), or drop it entirely - no output for it at all - (false).\n\n Note this is a policy override, not the literal mathematical result: e.g. for\n `And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\n still leaves A untouched rather than emitting a zero-area object.",
                   "type": "boolean",
                   "default": true
                 },
                 "minOverlapArea": {
-                  "description": "Minimum overlap area before an `other_class` object is treated as a partner\n of an input ROI; objects overlapping less than this are ignored.",
+                  "description": "Minimum overlap area before an `other_class` object is treated as a partner\n of an input object; objects overlapping less than this are ignored.",
                   "type": "number",
                   "format": "float",
                   "default": 2
@@ -4713,7 +4792,7 @@
                       ]
                     }
                   ],
-                  "description": "If unset, the result replaces the input ROI in place.\n\n If set, a new ROI carrying this class is created for each input ROI instead,\n leaving the input ROI untouched.",
+                  "description": "If unset, the result replaces the input object in place.\n\n If set, a new object carrying this class is created for each input object instead,\n leaving the input object untouched.",
                   "default": "UNSET"
                 },
                 "sizeUnit": {
@@ -4727,10 +4806,69 @@
                 },
                 "type": {
                   "type": "string",
-                  "const": "roiMath"
+                  "const": "objectMath"
                 }
               },
               "required": [
+                "type"
+              ]
+            },
+            {
+              "description": "A filter that transforms pixels based on the statistical rank of their neighbors.\n\n Rank filters are non-linear operators used for noise reduction,\n morphological operations, and feature enhancement.\n\n This algorithm sorts (ranks) all pixel values within a local neighborhood\n window and assigns a specific percentile value to the center pixel. By selecting\n different ranks, it acts as a configurable operator: the minimum rank performs\n erosion, the maximum rank performs dilation, and the median rank (50th percentile)\n provides highly effective impulse noise suppression while preserving sharp structural edges.",
+              "type": "object",
+              "properties": {
+                "filterType": {
+                  "description": "The specific ranking algorithm to apply to the neighborhood.",
+                  "oneOf": [
+                    {
+                      "description": "Selects the middle value. Excellent for removing salt-and-pepper noise\nwhile preserving sharp edges.",
+                      "type": "string",
+                      "const": "MEDIAN"
+                    },
+                    {
+                      "description": "Selects the lowest intensity (Erosion). Shrinks bright regions and\nexpands dark regions.",
+                      "type": "string",
+                      "const": "MIN"
+                    },
+                    {
+                      "description": "Selects the highest intensity (Dilation). Expands bright regions and\nshrinks dark regions.",
+                      "type": "string",
+                      "const": "MAX"
+                    },
+                    {
+                      "description": "Computes the average value. Acts as a box blur, smoothing the image\nbut blurring edges.",
+                      "type": "string",
+                      "const": "MEAN"
+                    },
+                    {
+                      "description": "Replaces a pixel only if it deviates from the neighborhood median\nby more than the specified threshold.",
+                      "type": "object",
+                      "properties": {
+                        "OUTLIERS": {
+                          "type": "number",
+                          "format": "float"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "OUTLIERS"
+                      ]
+                    }
+                  ]
+                },
+                "radius": {
+                  "description": "The circular radius of the neighborhood to consider.\n\n A radius of 1.0 roughly corresponds to a 3x3 square, while larger\n values increase the effect's strength and computational cost.",
+                  "type": "number",
+                  "format": "double"
+                },
+                "type": {
+                  "type": "string",
+                  "const": "rankFilter"
+                }
+              },
+              "required": [
+                "radius",
+                "filterType",
                 "type"
               ]
             },
@@ -4913,14 +5051,14 @@
               ]
             },
             {
-              "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\n This command applies a geometric transform (scale, circle, fitted ellipse) to every ROI\n carrying `input_class`. The transformed shape keeps the original ROI's bounding-box center.\n If `output_class` is unset (or equal to `input_class`) the input ROI is replaced in place;\n otherwise a new ROI carrying `output_class` is created alongside the untouched input ROI.",
+              "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\n This command applies a geometric transform (scale, circle, fitted ellipse) to every object\n carrying `input_class`. The transformed shape keeps the original object's bounding-box center.\n If `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\n otherwise a new object carrying `output_class` is created alongside the untouched input object.",
               "type": "object",
               "properties": {
                 "function": {
-                  "description": "Geometric transform applied to each input ROI",
+                  "description": "Geometric transform applied to each input object",
                   "oneOf": [
                     {
-                      "description": "Scale the ROI by the given scale factor.\n\nShape keeps and center of the ROI keeps the same, it is just shrinked or expanded.",
+                      "description": "Scale the object by the given scale factor.\n\nShape keeps and center of the object keeps the same, it is just shrinked or expanded.",
                       "type": "object",
                       "properties": {
                         "factor": {
@@ -4941,11 +5079,11 @@
                       ]
                     },
                     {
-                      "description": "Draws a circle around the ROI which is `extra_size` bigger than the ROI's bounding box.",
+                      "description": "Draws a circle around the object which is `extra_size` bigger than the object's bounding box.",
                       "type": "object",
                       "properties": {
                         "extraSize": {
-                          "description": "Size added on top of the ROI's bounding-box diameter",
+                          "description": "Size added on top of the object's bounding-box diameter",
                           "type": "number",
                           "format": "float",
                           "maximum": 65535,
@@ -4971,7 +5109,7 @@
                       ]
                     },
                     {
-                      "description": "Draws a circle around the ROI's bounding box, with `min_diameter` as the minimum diameter.",
+                      "description": "Draws a circle around the object's bounding box, with `min_diameter` as the minimum diameter.",
                       "type": "object",
                       "properties": {
                         "minDiameter": {
@@ -5001,11 +5139,11 @@
                       ]
                     },
                     {
-                      "description": "Draws a circle with exactly `diameter` as diameter around the ROI.\n\nIf `diameter` is 0, the ROI's bounding box is used as the diameter instead.",
+                      "description": "Draws a circle with exactly `diameter` as diameter around the object.\n\nIf `diameter` is 0, the object's bounding box is used as the diameter instead.",
                       "type": "object",
                       "properties": {
                         "diameter": {
-                          "description": "Circle diameter (0 = use the ROI's bounding box)",
+                          "description": "Circle diameter (0 = use the object's bounding box)",
                           "type": "number",
                           "format": "float",
                           "maximum": 65535,
@@ -5031,7 +5169,7 @@
                       ]
                     },
                     {
-                      "description": "Replaces the ROI with the ellipse fitted to its mask.",
+                      "description": "Replaces the object with the ellipse fitted to its mask.",
                       "type": "object",
                       "properties": {
                         "scale": {
@@ -5052,7 +5190,7 @@
                       ]
                     },
                     {
-                      "description": "Grows the ROI outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
+                      "description": "Grows the object outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
                       "type": "object",
                       "properties": {
                         "margin": {
@@ -5082,7 +5220,7 @@
                       ]
                     },
                     {
-                      "description": "Shrinks the ROI inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
+                      "description": "Shrinks the object inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
                       "type": "object",
                       "properties": {
                         "margin": {
@@ -5166,12 +5304,12 @@
                       ]
                     }
                   ],
-                  "description": "If unset, the transformed shape replaces the input ROI in place.\n\n If set, a new ROI carrying this class is created for each transformed input ROI instead,\n leaving the input ROI untouched.",
+                  "description": "If unset, the transformed shape replaces the input object in place.\n\n If set, a new object carrying this class is created for each transformed input object instead,\n leaving the input object untouched.",
                   "default": "UNSET"
                 },
                 "type": {
                   "type": "string",
-                  "const": "transformRois"
+                  "const": "transformObjects"
                 }
               },
               "required": [
@@ -5520,144 +5658,6 @@
         "radius",
         "filterType"
       ]
-    },
-    "RoiMathSettings": {
-      "description": "Computes a boolean set operation between two object classes, object pair by\n object pair.\n\n When more than one `other_class` object overlaps a given input ROI, all of them\n are unioned into a single \"B\" before the operation is applied, so the result\n doesn't depend on the order they'd otherwise be combined in.",
-      "type": "object",
-      "properties": {
-        "inputClass": {
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "UNSET"
-              ]
-            },
-            {
-              "type": "object",
-              "properties": {
-                "VALID": {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "VALID"
-              ]
-            }
-          ],
-          "description": "ROIs carrying this class are the left-hand operand (\"A\").",
-          "default": "UNSET"
-        },
-        "keepUnmatched": {
-          "description": "When an input ROI has no qualifying overlapping partner: keep it unchanged in\n the output (true), or drop it entirely - no output for it at all - (false).\n\n Note this is a policy override, not the literal mathematical result: e.g. for\n `And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\n still leaves A untouched rather than emitting a zero-area ROI.",
-          "type": "boolean",
-          "default": true
-        },
-        "minOverlapArea": {
-          "description": "Minimum overlap area before an `other_class` object is treated as a partner\n of an input ROI; objects overlapping less than this are ignored.",
-          "type": "number",
-          "format": "float",
-          "default": 2
-        },
-        "operation": {
-          "description": "Boolean set operation to apply",
-          "oneOf": [
-            {
-              "description": "Intersection: pixels present in both A and B. With no overlapping B, the\nresult is empty - there is nothing to keep regardless of `keep_unmatched`.",
-              "type": "string",
-              "const": "AND"
-            },
-            {
-              "description": "Union: pixels present in A or B (or both). The result can extend beyond A's\nown bounding box into B's territory.",
-              "type": "string",
-              "const": "OR"
-            },
-            {
-              "description": "Symmetric difference: pixels present in exactly one of A, B (the overlap\nitself is excluded). Like `Or`, the result can extend beyond A's bbox.",
-              "type": "string",
-              "const": "XOR"
-            },
-            {
-              "description": "Set difference: pixels in A that are NOT in B (A \\ B). The classic use case\nis deriving a cytoplasm-only region from a whole-cell mask and its nucleus.",
-              "type": "string",
-              "const": "SUBTRACT"
-            }
-          ],
-          "default": "AND"
-        },
-        "otherClass": {
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "UNSET"
-              ]
-            },
-            {
-              "type": "object",
-              "properties": {
-                "VALID": {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "VALID"
-              ]
-            }
-          ],
-          "description": "ROIs carrying this class are the right-hand operand (\"B\").",
-          "default": "UNSET"
-        },
-        "otherFilterClasses": {
-          "description": "Optional additional label filters applied to `other_class` objects.\n\n Only `other_class` objects that carry all listed classes are used.",
-          "type": "array",
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ObjectClass"
-          }
-        },
-        "outputClass": {
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "UNSET"
-              ]
-            },
-            {
-              "type": "object",
-              "properties": {
-                "VALID": {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "VALID"
-              ]
-            }
-          ],
-          "description": "If unset, the result replaces the input ROI in place.\n\n If set, a new ROI carrying this class is created for each input ROI instead,\n leaving the input ROI untouched.",
-          "default": "UNSET"
-        },
-        "sizeUnit": {
-          "type": "string",
-          "enum": [
-            "nm",
-            "px"
-          ],
-          "description": "Size unit for `min_overlap_area`",
-          "default": "px"
-        }
-      }
     },
     "RollingBallSettings": {
       "description": "Removes non-uniform background illumination by calculating a local intensity baseline.\n\n This algorithm models the image as a 3D intensity landscape and conceptually rolls\n a sphere of a user-defined radius underneath it. The ball cannot penetrate narrow\n intensity peaks (true signal objects) but follows the sweeping, lower-frequency\n curves of background variations. The path traced by the ball establishes a local\n baseline map that is subtracted from the original image to isolate foreground features.",
@@ -6040,15 +6040,15 @@
         "thresholds"
       ]
     },
-    "TransformRoisSettings": {
-      "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\n This command applies a geometric transform (scale, circle, fitted ellipse) to every ROI\n carrying `input_class`. The transformed shape keeps the original ROI's bounding-box center.\n If `output_class` is unset (or equal to `input_class`) the input ROI is replaced in place;\n otherwise a new ROI carrying `output_class` is created alongside the untouched input ROI.",
+    "TransformObjectsSettings": {
+      "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\n This command applies a geometric transform (scale, circle, fitted ellipse) to every object\n carrying `input_class`. The transformed shape keeps the original object's bounding-box center.\n If `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\n otherwise a new object carrying `output_class` is created alongside the untouched input object.",
       "type": "object",
       "properties": {
         "function": {
-          "description": "Geometric transform applied to each input ROI",
+          "description": "Geometric transform applied to each input object",
           "oneOf": [
             {
-              "description": "Scale the ROI by the given scale factor.\n\nShape keeps and center of the ROI keeps the same, it is just shrinked or expanded.",
+              "description": "Scale the object by the given scale factor.\n\nShape keeps and center of the object keeps the same, it is just shrinked or expanded.",
               "type": "object",
               "properties": {
                 "factor": {
@@ -6069,11 +6069,11 @@
               ]
             },
             {
-              "description": "Draws a circle around the ROI which is `extra_size` bigger than the ROI's bounding box.",
+              "description": "Draws a circle around the object which is `extra_size` bigger than the object's bounding box.",
               "type": "object",
               "properties": {
                 "extraSize": {
-                  "description": "Size added on top of the ROI's bounding-box diameter",
+                  "description": "Size added on top of the object's bounding-box diameter",
                   "type": "number",
                   "format": "float",
                   "maximum": 65535,
@@ -6099,7 +6099,7 @@
               ]
             },
             {
-              "description": "Draws a circle around the ROI's bounding box, with `min_diameter` as the minimum diameter.",
+              "description": "Draws a circle around the object's bounding box, with `min_diameter` as the minimum diameter.",
               "type": "object",
               "properties": {
                 "minDiameter": {
@@ -6129,11 +6129,11 @@
               ]
             },
             {
-              "description": "Draws a circle with exactly `diameter` as diameter around the ROI.\n\nIf `diameter` is 0, the ROI's bounding box is used as the diameter instead.",
+              "description": "Draws a circle with exactly `diameter` as diameter around the object.\n\nIf `diameter` is 0, the object's bounding box is used as the diameter instead.",
               "type": "object",
               "properties": {
                 "diameter": {
-                  "description": "Circle diameter (0 = use the ROI's bounding box)",
+                  "description": "Circle diameter (0 = use the object's bounding box)",
                   "type": "number",
                   "format": "float",
                   "maximum": 65535,
@@ -6159,7 +6159,7 @@
               ]
             },
             {
-              "description": "Replaces the ROI with the ellipse fitted to its mask.",
+              "description": "Replaces the object with the ellipse fitted to its mask.",
               "type": "object",
               "properties": {
                 "scale": {
@@ -6180,7 +6180,7 @@
               ]
             },
             {
-              "description": "Grows the ROI outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
+              "description": "Grows the object outward by `margin`, following its actual contour (standard flat\ndilation with a disk structuring element) - unlike `Scale`, irregular shapes\ngrow by a uniform margin instead of being stretched proportionally.",
               "type": "object",
               "properties": {
                 "margin": {
@@ -6210,7 +6210,7 @@
               ]
             },
             {
-              "description": "Shrinks the ROI inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
+              "description": "Shrinks the object inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
               "type": "object",
               "properties": {
                 "margin": {
@@ -6294,7 +6294,7 @@
               ]
             }
           ],
-          "description": "If unset, the transformed shape replaces the input ROI in place.\n\n If set, a new ROI carrying this class is created for each transformed input ROI instead,\n leaving the input ROI untouched.",
+          "description": "If unset, the transformed shape replaces the input object in place.\n\n If set, a new object carrying this class is created for each transformed input object instead,\n leaving the input object untouched.",
           "default": "UNSET"
         }
       }
