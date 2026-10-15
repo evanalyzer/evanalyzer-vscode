@@ -1,4 +1,4 @@
-import type { JsonSchema } from "./types";
+import type { JsonSchema, JsonType } from "./types";
 
 const DEFS_PREFIX = "#/$defs/";
 
@@ -39,7 +39,7 @@ export function resolveSchema(schema: JsonSchema, defs: Record<string, JsonSchem
 }
 
 /** Merges an overlay schema over a base schema; overlay wins on conflicts. */
-function mergeSchemas(base: JsonSchema, overlay: JsonSchema): JsonSchema {
+export function mergeSchemas(base: JsonSchema, overlay: JsonSchema): JsonSchema {
   const required = dedupe([...(base.required ?? []), ...(overlay.required ?? [])]);
 
   return {
@@ -57,4 +57,52 @@ function mergeSchemas(base: JsonSchema, overlay: JsonSchema): JsonSchema {
 
 function dedupe(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+/**
+ * The single type a schema stands for: `["string", "null"]` (an optional
+ * primitive) collapses to `"string"`, since a value is only ever written
+ * for it when the user supplies one.
+ */
+export function primaryType(schema: JsonSchema): JsonType | undefined {
+  if (!Array.isArray(schema.type)) {
+    return schema.type;
+  }
+  return schema.type.find((t) => t !== "null") ?? schema.type[0];
+}
+
+/**
+ * Splits a schema that has both its own keywords and a `oneOf`/`anyOf` -
+ * how schemars writes an externally tagged enum flattened next to shared
+ * fields, e.g. `PipelineStepSettings`: `id`/`enabled` in `properties`, and
+ * `oneOf: [{command}, {component}]` - into the shared part and the
+ * variants. `base` is undefined when the node has nothing besides the
+ * variants (a plain enum such as `PipelineCommand` or `ObjectClass`).
+ */
+export function splitVariants(schema: JsonSchema): { base: JsonSchema | undefined; variants: JsonSchema[] | undefined } {
+  const variants = schema.oneOf ?? schema.anyOf;
+  if (!variants) {
+    return { base: undefined, variants: undefined };
+  }
+  const base: JsonSchema = { ...schema };
+  delete base.oneOf;
+  delete base.anyOf;
+  const hasShared = base.properties !== undefined && Object.keys(base.properties).length > 0;
+  return { base: hasShared ? base : undefined, variants };
+}
+
+/**
+ * The tag a oneOf variant is recognised by: schemars' internally tagged
+ * `{"type": {"const": "BLUR"}}`, or - for an externally tagged variant
+ * such as `{"command": {...}}` / `{"GLOBAL": 3}` - its single required key.
+ */
+export function variantDiscriminator(variant: JsonSchema): { kind: "typeConst"; value: string } | { kind: "key"; value: string } | undefined {
+  const typeConst = variant.properties?.type?.const;
+  if (typeof typeConst === "string") {
+    return { kind: "typeConst", value: typeConst };
+  }
+  if (variant.required?.length === 1 && variant.properties?.[variant.required[0]]) {
+    return { kind: "key", value: variant.required[0] };
+  }
+  return undefined;
 }

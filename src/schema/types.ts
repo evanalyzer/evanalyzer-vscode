@@ -3,11 +3,14 @@
  * that the bundled EVAnalyzer schemas actually use. Not a general-purpose
  * JSON Schema type — just enough to drive the creation wizard.
  */
+export type JsonType = "object" | "array" | "string" | "integer" | "number" | "boolean" | "null";
+
 export interface JsonSchema {
   $ref?: string;
   title?: string;
   description?: string;
-  type?: "object" | "array" | "string" | "integer" | "number" | "boolean" | "null";
+  /** schemars writes Rust's `Option<T>` of a primitive as `["T", "null"]`. */
+  type?: JsonType | JsonType[];
   const?: unknown;
   enum?: unknown[];
   default?: unknown;

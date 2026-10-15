@@ -2,7 +2,7 @@
 "use strict";
 
 /**
- * Downloads the three JSON schemas from the *latest* published GitHub
+ * Downloads the JSON schemas from the *latest* published GitHub
  * release of evanalyzer/evanalyzer, overwriting schemas/*.schema.json.
  * Used by the release pipeline (see .github/workflows/release.yml) - not
  * part of the local dev workflow, which uses sync-schemas.sh against a
@@ -27,7 +27,7 @@ const https = require("node:https");
 
 const REPO = "evanalyzer/evanalyzer";
 const SCHEMAS_DIR = path.join(__dirname, "..", "schemas");
-const FILES = ["pipeline_template.schema.json", "project.schema.json", "project_template.schema.json"];
+const FILES = ["project.schema.json", "project_template.schema.json", "component_template.schema.json", "ai_learning.schema.json"];
 
 function fetchText(url, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {

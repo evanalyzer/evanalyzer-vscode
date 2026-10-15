@@ -8,7 +8,7 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
  * Rust source (crates/cfg/src/utils/hex_colors.rs): `color` is a `u32`
  * serialized as `#rrggbb` (serializer emits lowercase, deserializer accepts
  * either case, no alpha channel). "color" as a property key is unique to
- * `Class` across all three schemas, so matching on key name + hex shape is
+ * `Class` across all the schemas, so matching on key name + hex shape is
  * unambiguous here without needing full schema resolution.
  */
 export class ClassColorProvider implements vscode.DocumentColorProvider {

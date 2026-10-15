@@ -7,7 +7,7 @@ const provider = new ClassColorProvider();
 
 describe("ClassColorProvider.provideDocumentColors", () => {
   it("finds a color swatch for a Class.color value and decodes it correctly", () => {
-    const text = JSON.stringify({ classification: { classes: [{ id: { VALID: 0 }, color: "#3399ff", name: "" }] } });
+    const text = JSON.stringify({ classification: { classes: [{ id: 1, color: "#3399ff", name: "" }] } });
     const document = createTestDocument(text, "test.evapt");
 
     const results = provider.provideDocumentColors(document as never);

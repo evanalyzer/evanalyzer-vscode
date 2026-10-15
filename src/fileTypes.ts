@@ -23,14 +23,28 @@ export const PROJECT_TEMPLATE: EvaFileType = {
   suggestedName: "new-project-template",
 };
 
-export const PIPELINE_TEMPLATE: EvaFileType = {
-  title: "EVAnalyzer Pipeline Template",
-  extension: ".evapipe",
-  schemaFile: "pipeline_template.schema.json",
-  suggestedName: "new-pipeline-template",
+/** A component library file - replaced the old `.evapipe` pipeline templates. */
+export const COMPONENT_TEMPLATE: EvaFileType = {
+  title: "EVAnalyzer Component",
+  extension: ".evacomp",
+  schemaFile: "component_template.schema.json",
+  suggestedName: "new-component",
 };
 
-export const ALL_FILE_TYPES: EvaFileType[] = [PROJECT, PROJECT_TEMPLATE, PIPELINE_TEMPLATE];
+/**
+ * The `--settings` file `evanalyzer train-classifier` reads. evanalyzer
+ * itself accepts any `.json` path here; `.ailearning.json` is this
+ * extension's own convention, so the file gets validation without the
+ * extension having to claim every `.json` file.
+ */
+export const AI_LEARNING_SETTINGS: EvaFileType = {
+  title: "EVAnalyzer AI Learning Settings",
+  extension: ".ailearning.json",
+  schemaFile: "ai_learning.schema.json",
+  suggestedName: "classifier",
+};
+
+export const ALL_FILE_TYPES: EvaFileType[] = [PROJECT, PROJECT_TEMPLATE, COMPONENT_TEMPLATE, AI_LEARNING_SETTINGS];
 
 export function fileTypeForFileName(fileName: string): EvaFileType | undefined {
   return ALL_FILE_TYPES.find((fileType) => fileName.endsWith(fileType.extension));

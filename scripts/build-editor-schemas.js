@@ -33,7 +33,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SCHEMAS_DIR = path.join(__dirname, "..", "schemas");
-const SOURCE_FILES = ["project.schema.json", "project_template.schema.json", "pipeline_template.schema.json"];
+const SOURCE_FILES = ["project.schema.json", "project_template.schema.json", "component_template.schema.json", "ai_learning.schema.json"];
 
 for (const fileName of SOURCE_FILES) {
   const srcPath = path.join(SCHEMAS_DIR, fileName);

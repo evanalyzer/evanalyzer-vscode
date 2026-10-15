@@ -1,0 +1,78 @@
+{
+  "key": "ROOT",
+  "meta": {
+    "name": "",
+    "shortDescription": "",
+    "description": "",
+    "creationTime": "2026-10-15T17:26:24.493Z",
+    "appVersion": "",
+    "authors": [],
+    "category": "",
+    "tags": []
+  },
+  "steps": [
+    {
+      "id": 1,
+      "enabled": true,
+      "component": {
+        "key": "SMOOTH",
+        "values": {
+          "k": 5
+        }
+      }
+    }
+  ],
+  "parameters": [],
+  "classes": [
+    {
+      "id": 1,
+      "color": "#000000",
+      "name": "",
+      "notes": ""
+    }
+  ],
+  "schemaVersion": 0,
+  "uses": [
+    {
+      "key": "SMOOTH",
+      "meta": {
+        "name": "",
+        "shortDescription": "",
+        "description": "",
+        "authors": [],
+        "creationTime": "2026-10-15T17:26:35.034Z"
+      },
+      "classes": [
+        {
+          "id": 1,
+          "color": "#42d76d",
+          "name": "",
+          "notes": ""
+        }
+      ],
+      "steps": [
+        {
+          "id": 1,
+          "enabled": true,
+          "command": {
+            "type": "BLUR"
+          }
+        }
+      ],
+      "parameters": [
+        {
+          "key": "k",
+          "label": "",
+          "description": "",
+          "default": "",
+          "bindings": [
+            {
+              "step": 1,
+              "param": "kernel_size"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

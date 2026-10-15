@@ -1,15 +1,20 @@
 import * as vscode from "vscode";
 import { getNodePath, parseTree, type Node as JsoncNode } from "jsonc-parser";
-import { fileTypeForFileName } from "../fileTypes";
+import { COMPONENT_TEMPLATE, fileTypeForFileName } from "../fileTypes";
+import {
+  isClassArray,
+  isComponentDefinitionsArray,
+  isParametersArray,
+  isPipelinesArray,
+  isStepsArray,
+} from "../schema/locations";
+import type { JsonPath } from "../schema/schemaAtPath";
 
 /**
- * "+ Add X" buttons above the classes/pipelines/pipeline-steps arrays.
- * Located purely by property key name (verified unique per file: "classes"
- * only under ClassificationSettings, "pipelines" only at the document root,
- * "pipelineSteps"/"steps" only under a single pipeline entry - or, for
- * .evapipe files, "pipelineSteps" at the document root since the whole file
- * *is* a PipelineTemplate) rather than a full schema walk, since these
- * array locations are fixed and well-known.
+ * "+ Add X" buttons above the classes / pipelines / steps / component
+ * definitions / component parameters arrays. Located by JSON path (see
+ * schema/locations.ts) rather than a full schema walk, since these array
+ * locations are fixed and well-known.
  */
 export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -17,6 +22,7 @@ export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
     if (!fileType) {
       return [];
     }
+    const isComponentFile = fileType === COMPONENT_TEMPLATE;
 
     const tree = parseTree(document.getText());
     if (!tree) {
@@ -33,50 +39,59 @@ export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
         return;
       }
 
-      const key = keyNode.value;
       const arrayPath = getNodePath(valueNode);
       const position = document.positionAt(keyNode.offset);
       const range = new vscode.Range(position, position);
+      const lens = (title: string, command: string, args: unknown[] = [document.uri, arrayPath]) =>
+        lenses.push(new vscode.CodeLens(range, { title, command, arguments: args }));
 
-      if (key === "classes") {
-        lenses.push(
-          new vscode.CodeLens(range, { title: "$(add) Add Class", command: "evanalyzer.addClass", arguments: [document.uri, arrayPath] })
-        );
-      } else if (key === "pipelines" && arrayPath.length === 1) {
-        lenses.push(
-          new vscode.CodeLens(range, { title: "$(add) Add Pipeline", command: "evanalyzer.addPipeline", arguments: [document.uri, arrayPath] })
-        );
-      } else if (key === "pipelineSteps" || key === "steps") {
-        // One above each existing item (insert before that item) plus one
-        // anchored at the array's closing bracket (append at the end), so
-        // a command can be added at any position, not just appended. The
-        // trailing one is deliberately anchored at the bracket rather than
-        // above the array (i.e. before the first item) - that position
-        // would otherwise read as just another "insert before item 0".
-        for (const [index, itemNode] of (valueNode.children ?? []).entries()) {
-          const itemPosition = document.positionAt(itemNode.offset);
-          const itemRange = new vscode.Range(itemPosition, itemPosition);
-          lenses.push(
-            new vscode.CodeLens(itemRange, {
-              title: "$(add) Add Pipeline Command",
-              command: "evanalyzer.addPipelineCommand",
-              arguments: [document.uri, arrayPath, index],
-            })
-          );
-        }
-        const endPosition = document.positionAt(valueNode.offset + valueNode.length - 1);
-        lenses.push(
-          new vscode.CodeLens(new vscode.Range(endPosition, endPosition), {
-            title: "$(add) Add Pipeline Command",
-            command: "evanalyzer.addPipelineCommand",
-            arguments: [document.uri, arrayPath],
-          })
-        );
+      if (isClassArray(arrayPath, isComponentFile)) {
+        lens("$(add) Add Class", "evanalyzer.addClass");
+      } else if (isPipelinesArray(arrayPath, isComponentFile)) {
+        lens("$(add) Add Pipeline", "evanalyzer.addPipeline");
+      } else if (isComponentDefinitionsArray(arrayPath, isComponentFile)) {
+        lens("$(add) Add Component Definition", "evanalyzer.addComponentDefinition");
+      } else if (isParametersArray(arrayPath, isComponentFile)) {
+        lens("$(add) Add Parameter", "evanalyzer.addComponentParameter");
+      } else if (isStepsArray(arrayPath, isComponentFile)) {
+        pushStepLenses(document, valueNode, arrayPath, lenses);
       }
     });
 
     return lenses;
   }
+}
+
+/**
+ * One pair of buttons above each existing step (insert before that step)
+ * plus one pair anchored at the array's closing bracket (append at the
+ * end), so a step can be added at any position, not just appended. The
+ * trailing pair is deliberately anchored at the bracket rather than above
+ * the array (i.e. before the first item) - that position would otherwise
+ * read as just another "insert before item 0".
+ */
+function pushStepLenses(document: vscode.TextDocument, arrayNode: JsoncNode, arrayPath: JsonPath, lenses: vscode.CodeLens[]): void {
+  const pushPair = (range: vscode.Range, extraArgs: unknown[]) => {
+    lenses.push(
+      new vscode.CodeLens(range, {
+        title: "$(add) Add Pipeline Command",
+        command: "evanalyzer.addPipelineCommand",
+        arguments: [document.uri, arrayPath, ...extraArgs],
+      }),
+      new vscode.CodeLens(range, {
+        title: "$(symbol-module) Use Component",
+        command: "evanalyzer.addComponentStep",
+        arguments: [document.uri, arrayPath, ...extraArgs],
+      })
+    );
+  };
+
+  for (const [index, itemNode] of (arrayNode.children ?? []).entries()) {
+    const itemPosition = document.positionAt(itemNode.offset);
+    pushPair(new vscode.Range(itemPosition, itemPosition), [index]);
+  }
+  const endPosition = document.positionAt(arrayNode.offset + arrayNode.length - 1);
+  pushPair(new vscode.Range(endPosition, endPosition), []);
 }
 
 function walk(node: JsoncNode, visit: (node: JsoncNode) => void): void {

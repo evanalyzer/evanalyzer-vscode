@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0
+
+Follows evanalyzer's component rework (branch `save-image`): pipeline
+templates (`.evapipe`) are replaced by components (`.evacomp`), and
+projects/templates gained component definitions and component steps.
+
+- **Breaking:** dropped `.evapipe` support and the `New Pipeline Template`
+  command; added `.evacomp` (component template schema) and the
+  `New Component...` command.
+- Added the AI learning settings schema (the file `train-classifier
+  --settings` reads), validated for `*.ailearning.json`, with a
+  `New AI Learning Settings...` command.
+- Updated all bundled schemas. Notable changes the extension now follows:
+  `metadata` → `meta` on projects, `MetaData` authors as an `authors` list,
+  plain integer class ids (`{"VALID": n}` is gone) without `measure`,
+  `pipelineSteps` → `steps`, pipelines with a `name`, steps with an `id` and
+  either a `command` or a `component`, and `GLOBAL`/`LOCAL` class
+  references.
+- CodeLens: Add Class / Add Pipeline / Add Pipeline Command produce the new
+  shapes, with ids following evanalyzer's rules (class and step ids start
+  at 1). New buttons: Use Component (insert a component step), Add
+  Component Definition, Add Parameter. Buttons are now placed by JSON path,
+  since `classes`/`steps` are no longer unique key names.
+- New reference diagnostics: unknown/self-referencing component keys,
+  unknown parameters in `values`, bindings to missing step ids, duplicate
+  ids/keys, and `LOCAL`/`GLOBAL` class references that don't resolve.
+- New completions for component keys, component parameter names (with
+  defaults), and binding step ids.
+- New Quick Fix: fill a component step's `values` with every parameter of
+  its component at its default. "Fill in default values" now suggests the
+  next free step id instead of StepId's default of 0 (unassigned).
+- Wizard: supports variants that share fields (a step's `id`/`enabled` next
+  to `command`/`component`), externally tagged variants labelled by their
+  key (`GLOBAL`, `LOCAL`, `memory`, ...), and `["T", "null"]` types.
+- `sync-schemas.sh` now copies from the sibling `../evanalyzer/docs` (or
+  `EVANALYZER_DIR`) instead of the non-existent `../docs`.
+
 ## 0.2.0
 
 - Fixed the release pipeline not triggering for a prerelease-style tag

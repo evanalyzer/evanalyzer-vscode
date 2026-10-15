@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { resolveSchema } from "../schema/resolve";
+import { mergeSchemas, primaryType, resolveSchema, splitVariants, variantDiscriminator } from "../schema/resolve";
 import type { JsonSchema } from "../schema/types";
 
 /** Thrown only when the user backs out of the very first prompt of a wizard run. */
@@ -55,26 +55,29 @@ async function promptForSchema(schema: JsonSchema, defs: Record<string, JsonSche
   if (resolved.enum && resolved.enum.length === 1) {
     return resolved.enum[0];
   }
-  if (resolved.oneOf) {
-    return pickVariant(resolved.oneOf, defs, label, state);
+  // oneOf: tagged Rust enums. anyOf: schemars' `[T, {"type": "null"}]` for
+  // Rust's `Option<T>`, or an untagged enum such as `ParamValue`. Either may
+  // sit next to shared fields (`PipelineStepSettings`' id/enabled), which
+  // every variant then gets.
+  const { base, variants } = splitVariants(resolved);
+  if (variants) {
+    return pickVariant(variants, base, defs, label, state);
   }
-  if (resolved.anyOf) {
-    // schemars emits `anyOf: [T, {"type": "null"}]` for Rust's `Option<T>`.
-    return pickVariant(resolved.anyOf, defs, label, state);
-  }
-  if (resolved.type === "object" || resolved.properties) {
+
+  const type = primaryType(resolved);
+  if (type === "object" || resolved.properties) {
     return promptObject(resolved, defs, label, state);
   }
-  if (resolved.type === "array") {
+  if (type === "array") {
     return promptArray(resolved, defs, label, state);
   }
-  if (resolved.type === "string") {
+  if (type === "string") {
     return promptString(resolved, label, state);
   }
-  if (resolved.type === "integer" || resolved.type === "number") {
+  if (type === "integer" || type === "number") {
     return promptNumber(resolved, label, state);
   }
-  if (resolved.type === "boolean") {
+  if (type === "boolean") {
     return promptBoolean(resolved, label, state);
   }
 
@@ -98,14 +101,24 @@ interface VariantPickItem extends vscode.QuickPickItem {
   variant: JsonSchema | null; // null marks the "fast forward" sentinel item
 }
 
-/** Shared by `oneOf` (tagged Rust enums) and `anyOf` (nullable `Option<T>`). */
-async function pickVariant(variants: JsonSchema[], defs: Record<string, JsonSchema>, label: string, state: WizardState): Promise<unknown> {
+/**
+ * Shared by `oneOf` (tagged Rust enums) and `anyOf` (nullable `Option<T>`,
+ * untagged enums). `base` holds fields shared by every variant, merged
+ * into whichever one is picked; it doesn't affect a variant's label.
+ */
+async function pickVariant(
+  variants: JsonSchema[],
+  base: JsonSchema | undefined,
+  defs: Record<string, JsonSchema>,
+  label: string,
+  state: WizardState
+): Promise<unknown> {
   const variantItems: VariantPickItem[] = variants.map((variant, index) => {
     const resolvedVariant = resolveSchema(variant, defs);
     return {
-      label: variantTag(resolvedVariant, index),
+      label: variantTag(resolvedVariant, index, variant.$ref?.split("/").pop()),
       description: firstLine(resolvedVariant.description),
-      variant: resolvedVariant,
+      variant: base ? mergeSchemas(base, resolvedVariant) : resolvedVariant,
     };
   });
 
@@ -155,13 +168,13 @@ async function pickVariant(variants: JsonSchema[], defs: Record<string, JsonSche
   return promptForSchema(picked.variant as JsonSchema, defs, label, state);
 }
 
-function variantTag(resolved: JsonSchema, index: number): string {
+function variantTag(resolved: JsonSchema, index: number, defName: string | undefined): string {
   if (resolved.type === "null") {
     return "$(circle-slash) (none)";
   }
-  const typeConst = resolved.properties?.type?.const;
-  if (typeof typeConst === "string") {
-    return typeConst;
+  const discriminator = variantDiscriminator(resolved);
+  if (discriminator) {
+    return discriminator.value;
   }
   if (resolved.const !== undefined) {
     return String(resolved.const);
@@ -171,6 +184,14 @@ function variantTag(resolved: JsonSchema, index: number): string {
   }
   if (resolved.title) {
     return resolved.title;
+  }
+  if (defName) {
+    return defName;
+  }
+  const type = primaryType(resolved);
+  if (type) {
+    // Untagged primitive variants, e.g. ParamValue's boolean/integer/number/string/array.
+    return type;
   }
   return `Option ${index + 1}`;
 }
@@ -195,7 +216,7 @@ async function promptObject(schema: JsonSchema, defs: Record<string, JsonSchema>
       result[key] = resolvedProp.const;
       continue;
     }
-    if (resolvedProp.type === "string" && resolvedProp.format === "date-time") {
+    if (primaryType(resolvedProp) === "string" && resolvedProp.format === "date-time") {
       result[key] = new Date().toISOString();
       continue;
     }
@@ -337,7 +358,7 @@ async function promptString(schema: JsonSchema, label: string, state: WizardStat
 }
 
 async function promptNumber(schema: JsonSchema, label: string, state: WizardState): Promise<unknown> {
-  const isInteger = schema.type === "integer";
+  const isInteger = primaryType(schema) === "integer";
   const hasDefault = schema.default !== undefined;
 
   const { isFirst, skip } = beginPrompt(state);

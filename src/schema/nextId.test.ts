@@ -1,26 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { nextClassId, nextPipelineId } from "./nextId";
+import { nextClassId, nextPipelineId, nextStepId } from "./nextId";
 
 describe("nextClassId", () => {
-  it("returns 0 for an empty array", () => {
-    expect(nextClassId([])).toBe(0);
+  it("returns 1 for an empty array - 0 is the background's", () => {
+    expect(nextClassId([])).toBe(1);
   });
 
-  it("returns 0 for non-array input", () => {
-    expect(nextClassId(undefined)).toBe(0);
-    expect(nextClassId(null)).toBe(0);
+  it("returns 1 for non-array input", () => {
+    expect(nextClassId(undefined)).toBe(1);
+    expect(nextClassId(null)).toBe(1);
   });
 
-  it("returns one past the highest VALID id, regardless of order", () => {
-    expect(nextClassId([{ id: { VALID: 1 } }, { id: { VALID: 3 } }, { id: { VALID: 2 } }])).toBe(4);
-  });
-
-  it("ignores UNSET entries mixed in with VALID ones", () => {
-    expect(nextClassId([{ id: "UNSET" }, { id: { VALID: 5 } }])).toBe(6);
+  it("returns one past the highest id, regardless of order", () => {
+    expect(nextClassId([{ id: 1 }, { id: 3 }, { id: 2 }])).toBe(4);
   });
 
   it("ignores malformed entries rather than throwing", () => {
-    expect(nextClassId([{}, { id: {} }, { id: { VALID: "not a number" } }, null, "garbage"])).toBe(0);
+    expect(nextClassId([{}, { id: {} }, { id: "not a number" }, null, "garbage"])).toBe(1);
+  });
+});
+
+describe("nextStepId", () => {
+  it("returns 1 for an empty list - 0 is StepId::UNASSIGNED", () => {
+    expect(nextStepId([])).toBe(1);
+  });
+
+  it("returns one past the highest id", () => {
+    expect(nextStepId([{ id: 1 }, { id: 7 }, { id: 0 }])).toBe(8);
   });
 });
 

@@ -1,8 +1,8 @@
 {
   "name": "evanalyzer-file-support",
   "displayName": "EVAnalyzer File Support",
-  "description": "Syntax highlighting, JSON Schema validation/autocomplete, and schema-driven creation wizards for EVAnalyzer .evapipe, .evaproj, and .evapt files.",
-  "version": "0.2.0",
+  "description": "Syntax highlighting, JSON Schema validation/autocomplete, component reference checks, and schema-driven creation wizards for EVAnalyzer .evaproj, .evapt, and .evacomp files.",
+  "version": "0.3.0",
   "publisher": "evanalyzer",
   "engines": {
     "vscode": "^1.85.0"
@@ -24,17 +24,13 @@
       {
         "id": "json",
         "extensions": [
-          ".evapipe",
           ".evaproj",
-          ".evapt"
+          ".evapt",
+          ".evacomp"
         ]
       }
     ],
     "jsonValidation": [
-      {
-        "fileMatch": "*.evapipe",
-        "url": "./schemas/pipeline_template.editor.schema.json"
-      },
       {
         "fileMatch": "*.evaproj",
         "url": "./schemas/project.editor.schema.json"
@@ -42,6 +38,14 @@
       {
         "fileMatch": "*.evapt",
         "url": "./schemas/project_template.editor.schema.json"
+      },
+      {
+        "fileMatch": "*.evacomp",
+        "url": "./schemas/component_template.editor.schema.json"
+      },
+      {
+        "fileMatch": "*.ailearning.json",
+        "url": "./schemas/ai_learning.editor.schema.json"
       }
     ],
     "commands": [
@@ -56,8 +60,13 @@
         "category": "EVAnalyzer"
       },
       {
-        "command": "evanalyzer.newPipelineTemplate",
-        "title": "New EVAnalyzer Pipeline Template...",
+        "command": "evanalyzer.newComponent",
+        "title": "New EVAnalyzer Component...",
+        "category": "EVAnalyzer"
+      },
+      {
+        "command": "evanalyzer.newAiLearningSettings",
+        "title": "New EVAnalyzer AI Learning Settings...",
         "category": "EVAnalyzer"
       }
     ],
@@ -78,8 +87,12 @@
           "group": "1_evanalyzer@2"
         },
         {
-          "command": "evanalyzer.newPipelineTemplate",
+          "command": "evanalyzer.newComponent",
           "group": "1_evanalyzer@3"
+        },
+        {
+          "command": "evanalyzer.newAiLearningSettings",
+          "group": "1_evanalyzer@4"
         }
       ]
     },

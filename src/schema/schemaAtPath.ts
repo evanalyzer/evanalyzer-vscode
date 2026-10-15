@@ -1,5 +1,5 @@
 import { findNodeAtLocation, getNodeValue, type Node as JsoncNode } from "jsonc-parser";
-import { resolveSchema } from "./resolve";
+import { mergeSchemas, resolveSchema, splitVariants, variantDiscriminator } from "./resolve";
 import type { JsonSchema } from "./types";
 
 export type JsonPath = (string | number)[];
@@ -10,12 +10,14 @@ export type JsonPath = (string | number)[];
  * prompting (this is the wizard's resolution, driven by existing content
  * rather than user input).
  *
- * Only understands the two discriminator shapes these schemas actually use:
+ * Understands the discriminator shapes these schemas actually use:
  * schemars' internally-tagged `properties.type.const` pattern (used by
- * PipelineCommand and similar), and `anyOf: [T, {type: "null"}]` for Rust's
- * `Option<T>`. A branch that uses neither (e.g. a bare string/const enum
- * variant) is left unresolved - that just means no defaultable properties
- * are found there, not a crash.
+ * PipelineCommand and similar), externally tagged variants recognised by
+ * their single required key (`{"command": ...}` / `{"component": ...}`,
+ * `{"GLOBAL": 3}`), and `anyOf: [T, {type: "null"}]` for Rust's
+ * `Option<T>`. A branch that uses none of them (e.g. a bare string/const
+ * enum variant) is left unresolved - that just means no defaultable
+ * properties are found there, not a crash.
  */
 export function schemaAtPath(
   root: JsonSchema,
@@ -56,13 +58,22 @@ export function schemaAtPath(
 }
 
 function selectBranch(schema: JsonSchema, defs: Record<string, JsonSchema>, tree: JsoncNode, path: JsonPath): JsonSchema | undefined {
-  const variants = schema.oneOf ?? schema.anyOf;
+  const { base, variants } = splitVariants(schema);
   if (!variants) {
     return schema;
   }
 
   const actual = valueAt(tree, path);
+  const selected = pickBranch(schema, variants, defs, actual);
+  if (!base) {
+    return selected;
+  }
+  // Shared fields next to the variants (PipelineStepSettings' id/enabled):
+  // still usable before a variant is chosen, and merged into it after.
+  return selected ? mergeSchemas(base, selected) : base;
+}
 
+function pickBranch(schema: JsonSchema, variants: JsonSchema[], defs: Record<string, JsonSchema>, actual: unknown): JsonSchema | undefined {
   if (schema.anyOf && variants.length === 2) {
     const nullVariant = variants.find((v) => resolveSchema(v, defs).type === "null");
     const otherVariant = variants.find((v) => v !== nullVariant);
@@ -81,12 +92,13 @@ function selectBranch(schema: JsonSchema, defs: Record<string, JsonSchema>, tree
 }
 
 function matchesDiscriminator(resolved: JsonSchema, actual: unknown): boolean {
-  const tag = resolved.properties?.type?.const;
-  if (typeof tag !== "string") {
+  const discriminator = variantDiscriminator(resolved);
+  if (!discriminator || typeof actual !== "object" || actual === null) {
     // No recognized discriminator on this branch - can't tell from `actual`.
     return false;
   }
-  return typeof actual === "object" && actual !== null && (actual as Record<string, unknown>).type === tag;
+  const record = actual as Record<string, unknown>;
+  return discriminator.kind === "typeConst" ? record.type === discriminator.value : discriminator.value in record;
 }
 
 function valueAt(tree: JsoncNode, path: JsonPath): unknown {
