@@ -16,8 +16,8 @@ import type { RootSchemaFile } from "../schema/types";
 import { WizardCancelled, runWizard } from "./wizard";
 
 const schemasDir = path.join(__dirname, "..", "..", "schemas");
-const componentSchema: RootSchemaFile = JSON.parse(readFileSync(path.join(schemasDir, "component_template.schema.json"), "utf8"));
-const commandSchema = componentSchema.$defs.PipelineCommand;
+const moduleSchema: RootSchemaFile = JSON.parse(readFileSync(path.join(schemasDir, "module_template.schema.json"), "utf8"));
+const commandSchema = moduleSchema.$defs.PipelineCommand;
 const commandVariantLabels = commandSchema.oneOf!.map((v) => v.properties!.type!.const as string);
 
 beforeEach(() => {
@@ -26,14 +26,14 @@ beforeEach(() => {
 });
 
 describe("runWizard: cancelling the very first prompt aborts", () => {
-  it("aborts when the first prompt is a plain text field (ComponentTemplate.key)", async () => {
+  it("aborts when the first prompt is a plain text field (ModuleTemplate.key)", async () => {
     mockCancelInput();
-    await expect(runWizard(componentSchema, componentSchema.$defs, "ComponentTemplate")).rejects.toThrow(WizardCancelled);
+    await expect(runWizard(moduleSchema, moduleSchema.$defs, "ModuleTemplate")).rejects.toThrow(WizardCancelled);
   });
 
   it("aborts when the first prompt is a oneOf variant picker (PipelineCommand's type)", async () => {
     mockCancelPick();
-    await expect(runWizard(commandSchema, componentSchema.$defs, "Pipeline Command")).rejects.toThrow(WizardCancelled);
+    await expect(runWizard(commandSchema, moduleSchema.$defs, "Pipeline Command")).rejects.toThrow(WizardCancelled);
   });
 });
 
@@ -48,7 +48,7 @@ describe("runWizard: cancelling any later prompt skips that field instead of abo
     mockCancelPick(); // parameters "add another?"
     mockCancelPick(); // root optional-field picker ("classes"/"uses"/...)
 
-    const result = await runWizard(componentSchema, componentSchema.$defs, "ComponentTemplate");
+    const result = await runWizard(moduleSchema, moduleSchema.$defs, "ModuleTemplate");
 
     expect(result.key).toBe("NUCLEI_DETECTION");
     expect(result.meta).toMatchObject({ name: "", shortDescription: "", description: "" });
@@ -62,7 +62,7 @@ describe("runWizard: cancelling any later prompt skips that field instead of abo
     mockCancelInput(); // threshold (number, no default)
     mockCancelPick(); // edgesAreBackground (boolean, no default)
 
-    const command = await runWizard(commandSchema, componentSchema.$defs, "Pipeline Command");
+    const command = await runWizard(commandSchema, moduleSchema.$defs, "Pipeline Command");
 
     expect(command).toEqual({ type: "DISTANCE_TRANSFORM", threshold: 0, edgesAreBackground: false });
   });
@@ -73,7 +73,7 @@ describe('runWizard: "Done - fill everything else with defaults"', () => {
     mockFastForwardInput();
     mockFastForwardEverythingElse();
 
-    const result = await runWizard(componentSchema, componentSchema.$defs, "ComponentTemplate");
+    const result = await runWizard(moduleSchema, moduleSchema.$defs, "ModuleTemplate");
 
     expect(result.meta).toMatchObject({ name: "", shortDescription: "", description: "", authors: [], tags: [] });
     expect(result).toMatchObject({ key: "", steps: [], parameters: [], classes: [], uses: [] });
@@ -83,7 +83,7 @@ describe('runWizard: "Done - fill everything else with defaults"', () => {
     mockFastForwardPick();
     mockFastForwardEverythingElse();
 
-    const command = await runWizard(commandSchema, componentSchema.$defs, "Pipeline Command");
+    const command = await runWizard(commandSchema, moduleSchema.$defs, "Pipeline Command");
 
     expect(command.type).toBe(commandVariantLabels[0]); // "AI_OBJECT_CLASSIFIER"
   });
@@ -92,7 +92,7 @@ describe('runWizard: "Done - fill everything else with defaults"', () => {
     mockPickLabel("BLUR");
     mockFastForwardEverythingElse();
 
-    const command = await runWizard(commandSchema, componentSchema.$defs, "Pipeline Command");
+    const command = await runWizard(commandSchema, moduleSchema.$defs, "Pipeline Command");
 
     expect(command).toEqual({ type: "BLUR", kernelSize: 3 });
   });
@@ -105,7 +105,7 @@ describe('runWizard: "Done - fill everything else with defaults"', () => {
     mockPickLabel("GAUSSIAN_BLUR");
     mockFastForwardPick(); // the optional-fields picker's own fast-forward item
 
-    const command = await runWizard(commandSchema, componentSchema.$defs, "Pipeline Command");
+    const command = await runWizard(commandSchema, moduleSchema.$defs, "Pipeline Command");
 
     expect(command).toEqual({ type: "GAUSSIAN_BLUR", kernelSize: 3, sigma: 0.3400000035762787 });
   });
@@ -114,7 +114,7 @@ describe('runWizard: "Done - fill everything else with defaults"', () => {
     mockPickLabel(label);
     mockFastForwardEverythingElse();
 
-    const command = await runWizard(commandSchema, componentSchema.$defs, "Pipeline Command");
+    const command = await runWizard(commandSchema, moduleSchema.$defs, "Pipeline Command");
 
     const variantSchema = commandSchema.oneOf!.find((v) => v.properties!.type!.const === label)!;
     const expectedDefaultKeys = Object.entries(variantSchema.$ref ? resolveRefForTest(variantSchema) : variantSchema.properties ?? {})
@@ -130,12 +130,12 @@ describe('runWizard: "Done - fill everything else with defaults"', () => {
 
 describe("runWizard: externally tagged variants and nullable primitive types", () => {
   it("offers a step's variants by their key and merges the shared id/enabled fields into the picked one", async () => {
-    mockPickLabel("component");
+    mockPickLabel("module");
     mockFastForwardEverythingElse();
 
-    const step = await runWizard(componentSchema.$defs.PipelineStepSettings, componentSchema.$defs, "Step");
+    const step = await runWizard(moduleSchema.$defs.PipelineStepSettings, moduleSchema.$defs, "Step");
 
-    expect(step).toEqual({ enabled: false, component: { key: "", values: {} }, id: 0 });
+    expect(step).toEqual({ enabled: false, module: { key: "", values: {} }, id: 0 });
   });
 
   it("labels ObjectClass variants GLOBAL/LOCAL/UNSET and builds the picked one", async () => {
@@ -145,7 +145,7 @@ describe("runWizard: externally tagged variants and nullable primitive types", (
     });
     mockAcceptInput("2");
 
-    const objectClass = await runWizard(componentSchema.$defs.ObjectClass, componentSchema.$defs, "Class");
+    const objectClass = await runWizard(moduleSchema.$defs.ObjectClass, moduleSchema.$defs, "Class");
 
     expect(objectClass).toEqual({ LOCAL: 2 });
   });
@@ -169,7 +169,7 @@ describe("runWizard: externally tagged variants and nullable primitive types", (
 // semantics test coverage already has its own file for.
 function resolveRefForTest(variant: { $ref?: string }): Record<string, unknown> {
   const refName = variant.$ref!.replace("#/$defs/", "");
-  return (componentSchema.$defs[refName] as { properties?: Record<string, unknown> })?.properties ?? {};
+  return (moduleSchema.$defs[refName] as { properties?: Record<string, unknown> })?.properties ?? {};
 }
 
 describe("runWizard: every file type's wizard completes on fast-forward", () => {

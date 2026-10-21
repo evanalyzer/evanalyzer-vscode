@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { applyEdits, findNodeAtLocation, findNodeAtOffset, getNodePath, getNodeValue, modify, parseTree, type Node as JsoncNode } from "jsonc-parser";
-import { COMPONENT_TEMPLATE, fileTypeForFileName } from "../fileTypes";
-import { findComponentDefinition } from "../references/componentIndex";
+import { MODULE_TEMPLATE, fileTypeForFileName } from "../fileTypes";
+import { findModuleDefinition } from "../references/moduleIndex";
 import { isClassArray, isPipelinesArray, isStepsArray } from "../schema/locations";
 import { nextClassId, nextPipelineId, nextStepId } from "../schema/nextId";
 import { resolveSchema } from "../schema/resolve";
@@ -27,8 +27,8 @@ interface FillEntry {
  *   no usable static default (StepId's is 0, "unassigned"), but a "next
  *   unused id" is something we *can* compute from sibling array entries,
  *   so those get suggested instead.
- * - A component step's `values`: a second action fills in every parameter
- *   of the used component definition that isn't set yet, with that
+ * - A module step's `values`: a second action fills in every parameter
+ *   of the used module definition that isn't set yet, with that
  *   parameter's default - turning "uses the default" into an explicit,
  *   editable value.
  */
@@ -77,9 +77,9 @@ export class FillDefaultsCodeActionProvider implements vscode.CodeActionProvider
 
     const existing = (getNodeValue(node) as Record<string, unknown> | undefined) ?? {};
     const existingKeys = new Set(Object.keys(existing));
-    const isComponentFile = fileType === COMPONENT_TEMPLATE;
+    const isModuleFile = fileType === MODULE_TEMPLATE;
 
-    const idSuggestion = computeIdSuggestion(objectPath, schema, existingKeys, tree, isComponentFile);
+    const idSuggestion = computeIdSuggestion(objectPath, schema, existingKeys, tree, isModuleFile);
     const defaultable: FillEntry[] = Object.entries(schema.properties)
       .filter(([key]) => !(idSuggestion && key === idSuggestion.key))
       .map(([key, propSchema]) => [key, resolveSchema(propSchema, rootSchema.$defs)] as const)
@@ -97,7 +97,7 @@ export class FillDefaultsCodeActionProvider implements vscode.CodeActionProvider
       actions.push(action);
     }
 
-    const parameterFill = componentParameterFill(tree, objectPath, existing, isComponentFile);
+    const parameterFill = moduleParameterFill(tree, objectPath, existing, isModuleFile);
     if (parameterFill) {
       const action = new vscode.CodeAction(parameterFill.title, vscode.CodeActionKind.QuickFix);
       action.edit = buildFillEdit(document, text, parameterFill.valuesPath, parameterFill.entries);
@@ -112,7 +112,7 @@ function computeIdSuggestion(
   schema: JsonSchema,
   existingKeys: Set<string>,
   tree: JsoncNode,
-  isComponentFile: boolean
+  isModuleFile: boolean
 ): FillEntry | undefined {
   if (existingKeys.has("id") || !schema.properties?.id || typeof objectPath[objectPath.length - 1] !== "number") {
     return undefined;
@@ -120,49 +120,49 @@ function computeIdSuggestion(
   const arrayPath = objectPath.slice(0, -1);
   const siblings = valueAtPath(tree, arrayPath);
 
-  if (isClassArray(arrayPath, isComponentFile)) {
+  if (isClassArray(arrayPath, isModuleFile)) {
     return { key: "id", value: nextClassId(siblings) };
   }
-  if (isPipelinesArray(arrayPath, isComponentFile)) {
+  if (isPipelinesArray(arrayPath, isModuleFile)) {
     return { key: "id", value: nextPipelineId(siblings) };
   }
-  if (isStepsArray(arrayPath, isComponentFile)) {
+  if (isStepsArray(arrayPath, isModuleFile)) {
     return { key: "id", value: nextStepId(siblings) };
   }
   return undefined;
 }
 
 /**
- * When the cursor is in a component step (`{"component": {...}}`), its
- * `component` object, or that object's `values`: the parameters of the
+ * When the cursor is in a module step (`{"module": {...}}`), its
+ * `module` object, or that object's `values`: the parameters of the
  * used definition that `values` doesn't set yet, with their defaults.
  */
-function componentParameterFill(
+function moduleParameterFill(
   tree: JsoncNode,
   objectPath: JsonPath,
   objectValue: Record<string, unknown>,
-  isComponentFile: boolean
+  isModuleFile: boolean
 ): { title: string; valuesPath: JsonPath; entries: FillEntry[] } | undefined {
-  let componentPath: JsonPath;
-  if (objectPath[objectPath.length - 1] === "values" && objectPath[objectPath.length - 2] === "component") {
-    componentPath = objectPath.slice(0, -1);
-  } else if (objectPath[objectPath.length - 1] === "component") {
-    componentPath = objectPath;
-  } else if (objectValue.component !== undefined) {
-    componentPath = [...objectPath, "component"];
+  let modulePath: JsonPath;
+  if (objectPath[objectPath.length - 1] === "values" && objectPath[objectPath.length - 2] === "module") {
+    modulePath = objectPath.slice(0, -1);
+  } else if (objectPath[objectPath.length - 1] === "module") {
+    modulePath = objectPath;
+  } else if (objectValue.module !== undefined) {
+    modulePath = [...objectPath, "module"];
   } else {
     return undefined;
   }
-  if (!isStepsArray(componentPath.slice(0, -2), isComponentFile)) {
+  if (!isStepsArray(modulePath.slice(0, -2), isModuleFile)) {
     return undefined;
   }
 
-  const instance = valueAtPath(tree, componentPath) as Record<string, unknown> | undefined;
+  const instance = valueAtPath(tree, modulePath) as Record<string, unknown> | undefined;
   const key = instance?.key;
   if (typeof key !== "string") {
     return undefined;
   }
-  const definition = findComponentDefinition(tree, key, isComponentFile);
+  const definition = findModuleDefinition(tree, key, isModuleFile);
   if (!definition) {
     return undefined;
   }
@@ -174,7 +174,7 @@ function componentParameterFill(
   if (entries.length === 0) {
     return undefined;
   }
-  return { title: `Fill in parameter values for component "${key}"`, valuesPath: [...componentPath, "values"], entries };
+  return { title: `Fill in parameter values for module "${key}"`, valuesPath: [...modulePath, "values"], entries };
 }
 
 function valueAtPath(tree: JsoncNode, path: JsonPath): unknown {

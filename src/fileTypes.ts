@@ -18,17 +18,17 @@ export const PROJECT: EvaFileType = {
 
 export const PROJECT_TEMPLATE: EvaFileType = {
   title: "EVAnalyzer Project Template",
-  extension: ".evapt",
+  extension: ".evatemplate",
   schemaFile: "project_template.schema.json",
   suggestedName: "new-project-template",
 };
 
-/** A component library file - replaced the old `.evapipe` pipeline templates. */
-export const COMPONENT_TEMPLATE: EvaFileType = {
-  title: "EVAnalyzer Component",
-  extension: ".evacomp",
-  schemaFile: "component_template.schema.json",
-  suggestedName: "new-component",
+/** A module library file - replaced the old `.evapipe` pipeline templates. */
+export const MODULE_TEMPLATE: EvaFileType = {
+  title: "EVAnalyzer Module",
+  extension: ".evamodule",
+  schemaFile: "module_template.schema.json",
+  suggestedName: "new-module",
 };
 
 /**
@@ -44,7 +44,7 @@ export const AI_LEARNING_SETTINGS: EvaFileType = {
   suggestedName: "classifier",
 };
 
-export const ALL_FILE_TYPES: EvaFileType[] = [PROJECT, PROJECT_TEMPLATE, COMPONENT_TEMPLATE, AI_LEARNING_SETTINGS];
+export const ALL_FILE_TYPES: EvaFileType[] = [PROJECT, PROJECT_TEMPLATE, MODULE_TEMPLATE, AI_LEARNING_SETTINGS];
 
 export function fileTypeForFileName(fileName: string): EvaFileType | undefined {
   return ALL_FILE_TYPES.find((fileType) => fileName.endsWith(fileType.extension));

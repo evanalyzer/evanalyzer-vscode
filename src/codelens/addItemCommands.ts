@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import { parseTree, type Node as JsoncNode } from "jsonc-parser";
 import { nextDistinctColorHex } from "../colors/nextDistinctColor";
-import { COMPONENT_TEMPLATE, fileTypeForFileName } from "../fileTypes";
-import { componentDefinitions, valueAt } from "../references/componentIndex";
-import { owningComponentPath } from "../schema/locations";
+import { MODULE_TEMPLATE, fileTypeForFileName } from "../fileTypes";
+import { moduleDefinitions, valueAt } from "../references/moduleIndex";
+import { owningModulePath } from "../schema/locations";
 import { nextClassId, nextPipelineId, nextStepId } from "../schema/nextId";
 import type { JsonPath } from "../schema/schemaAtPath";
 import { loadSchema } from "../schema/schemaLoader";
@@ -47,7 +47,7 @@ export async function addPipeline(uri: vscode.Uri, arrayPath: JsonPath): Promise
   });
 }
 
-export async function addComponentDefinition(uri: vscode.Uri, arrayPath: JsonPath): Promise<void> {
+export async function addModuleDefinition(uri: vscode.Uri, arrayPath: JsonPath): Promise<void> {
   const target = await openArray(uri, arrayPath);
   if (!target) {
     return;
@@ -61,7 +61,7 @@ export async function addComponentDefinition(uri: vscode.Uri, arrayPath: JsonPat
   });
 }
 
-export async function addComponentParameter(uri: vscode.Uri, arrayPath: JsonPath): Promise<void> {
+export async function addModuleParameter(uri: vscode.Uri, arrayPath: JsonPath): Promise<void> {
   const target = await openArray(uri, arrayPath);
   if (!target) {
     return;
@@ -110,31 +110,31 @@ export async function addPipelineCommand(
   await insertArrayItem(target.document, arrayPath, targetIndex, { id: nextStepId(target.existing), enabled: true, command });
 }
 
-interface ComponentPickItem extends vscode.QuickPickItem {
+interface ModulePickItem extends vscode.QuickPickItem {
   key: string;
 }
 
 /**
- * Inserts a step that runs one of the file's component definitions
- * (`components` in projects/templates, `uses` in `.evacomp`). `values`
+ * Inserts a step that runs one of the file's module definitions
+ * (`modules` in projects/templates, `uses` in `.evamodule`). `values`
  * starts empty: a parameter missing there takes the definition's default.
  */
-export async function addComponentStep(uri: vscode.Uri, arrayPath: JsonPath, insertIndex?: number): Promise<void> {
+export async function addModuleStep(uri: vscode.Uri, arrayPath: JsonPath, insertIndex?: number): Promise<void> {
   const fileType = fileTypeForFileName(uri.fsPath);
   const target = await openArray(uri, arrayPath);
   if (!fileType || !target) {
     return;
   }
-  const isComponentFile = fileType === COMPONENT_TEMPLATE;
+  const isModuleFile = fileType === MODULE_TEMPLATE;
 
-  const items = availableComponents(target.tree, arrayPath, isComponentFile);
+  const items = availableModules(target.tree, arrayPath, isModuleFile);
   if (items.length === 0) {
-    const where = isComponentFile ? "uses" : "components";
-    void vscode.window.showInformationMessage(`No component definitions to use yet - add one under "${where}" first.`);
+    const where = isModuleFile ? "uses" : "modules";
+    void vscode.window.showInformationMessage(`No module definitions to use yet - add one under "${where}" first.`);
     return;
   }
 
-  const picked = await vscode.window.showQuickPick(items, { placeHolder: "Component to use", ignoreFocusOut: true });
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: "Module to use", ignoreFocusOut: true });
   if (!picked) {
     return;
   }
@@ -143,15 +143,15 @@ export async function addComponentStep(uri: vscode.Uri, arrayPath: JsonPath, ins
   await insertArrayItem(target.document, arrayPath, targetIndex, {
     id: nextStepId(target.existing),
     enabled: true,
-    component: { key: picked.key, values: {} },
+    module: { key: picked.key, values: {} },
   });
 }
 
-/** Component definitions a steps array can use - excluding the one that owns the array, which can't use itself. */
-export function availableComponents(tree: JsoncNode, stepsPath: JsonPath, isComponentFile: boolean): ComponentPickItem[] {
-  const ownerPath = owningComponentPath(stepsPath, isComponentFile);
+/** Module definitions a steps array can use - excluding the one that owns the array, which can't use itself. */
+export function availableModules(tree: JsoncNode, stepsPath: JsonPath, isModuleFile: boolean): ModulePickItem[] {
+  const ownerPath = owningModulePath(stepsPath, isModuleFile);
   const ownKey = ownerPath ? valueAt(tree, [...ownerPath, "key"]) : undefined;
-  return componentDefinitions(tree, isComponentFile)
+  return moduleDefinitions(tree, isModuleFile)
     .filter((definition) => definition.key.length > 0 && definition.key !== ownKey)
     .map((definition) => ({
       label: definition.name ?? definition.key,
@@ -162,7 +162,7 @@ export function availableComponents(tree: JsoncNode, stepsPath: JsonPath, isComp
 }
 
 /**
- * A complete MetaData block for a new component definition. `authors` is
+ * A complete MetaData block for a new module definition. `authors` is
  * inherited from the file's own top-level meta when present (same author,
  * most likely); everything else - genuine content only the user can
  * write - starts as "".

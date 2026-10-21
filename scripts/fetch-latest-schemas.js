@@ -27,7 +27,7 @@ const https = require("node:https");
 
 const REPO = "evanalyzer/evanalyzer";
 const SCHEMAS_DIR = path.join(__dirname, "..", "schemas");
-const FILES = ["project.schema.json", "project_template.schema.json", "component_template.schema.json", "ai_learning.schema.json"];
+const FILES = ["project.schema.json", "project_template.schema.json", "module_template.schema.json", "ai_learning.schema.json"];
 
 function fetchText(url, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {

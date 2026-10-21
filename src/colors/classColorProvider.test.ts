@@ -8,7 +8,7 @@ const provider = new ClassColorProvider();
 describe("ClassColorProvider.provideDocumentColors", () => {
   it("finds a color swatch for a Class.color value and decodes it correctly", () => {
     const text = JSON.stringify({ classification: { classes: [{ id: 1, color: "#3399ff", name: "" }] } });
-    const document = createTestDocument(text, "test.evapt");
+    const document = createTestDocument(text, "test.evatemplate");
 
     const results = provider.provideDocumentColors(document as never);
 
@@ -22,25 +22,25 @@ describe("ClassColorProvider.provideDocumentColors", () => {
 
   it("accepts uppercase hex (deserializer is case-insensitive per the Rust source)", () => {
     const text = JSON.stringify({ color: "#3399FF" });
-    const document = createTestDocument(text, "test.evapt");
+    const document = createTestDocument(text, "test.evatemplate");
     expect(provider.provideDocumentColors(document as never)).toHaveLength(1);
   });
 
   it("ignores a 'color' key whose value isn't a 6-digit hex string", () => {
     const text = JSON.stringify({ color: "not-a-color", other: { color: "#fff" } });
-    const document = createTestDocument(text, "test.evapt");
+    const document = createTestDocument(text, "test.evatemplate");
     expect(provider.provideDocumentColors(document as never)).toHaveLength(0);
   });
 
   it("ignores hex-shaped strings under any key other than 'color' (e.g. range/HSV fields elsewhere in the schema)", () => {
     const text = JSON.stringify({ notColor: "#3399ff" });
-    const document = createTestDocument(text, "test.evapt");
+    const document = createTestDocument(text, "test.evatemplate");
     expect(provider.provideDocumentColors(document as never)).toHaveLength(0);
   });
 
   it("finds every color in a document with multiple classes", () => {
     const text = JSON.stringify({ classes: [{ color: "#ff0000" }, { color: "#00ff00" }, { color: "#0000ff" }] });
-    const document = createTestDocument(text, "test.evapt");
+    const document = createTestDocument(text, "test.evatemplate");
     expect(provider.provideDocumentColors(document as never)).toHaveLength(3);
   });
 });

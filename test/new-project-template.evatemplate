@@ -1,38 +1,58 @@
 {
-  "key": "ROOT",
   "meta": {
     "name": "",
     "shortDescription": "",
     "description": "",
-    "creationTime": "2026-10-15T17:26:24.493Z",
+    "creationTime": "2026-10-15T17:26:24.492Z",
     "appVersion": "",
     "authors": [],
     "category": "",
     "tags": []
   },
-  "steps": [
-    {
-      "id": 1,
-      "enabled": true,
-      "component": {
-        "key": "SMOOTH",
-        "values": {
-          "k": 5
-        }
+  "classification": {
+    "classes": [
+      {
+        "id": 1,
+        "color": "#d74242",
+        "name": "",
+        "notes": ""
       }
-    }
-  ],
-  "parameters": [],
-  "classes": [
+    ]
+  },
+  "plate": {
+    "groupingMode": "AUTO",
+    "groupingRegex": "",
+    "plateSize": "AUTO",
+    "wellLayout": "AUTO",
+    "wellImageOrder": []
+  },
+  "pipelines": [
     {
-      "id": 1,
-      "color": "#000000",
+      "id": 0,
       "name": "",
-      "notes": ""
+      "imageSource": "SCRATCHPAD",
+      "enabled": true,
+      "steps": [
+        {
+          "id": 1,
+          "enabled": true,
+          "command": {
+            "type": "BLUR",
+            "kernelSize": 3
+          }
+        },
+        {
+          "id": 2,
+          "enabled": true,
+          "module": {
+            "key": "SMOOTH",
+            "values": {}
+          }
+        }
+      ]
     }
   ],
-  "schemaVersion": 0,
-  "uses": [
+  "modules": [
     {
       "key": "SMOOTH",
       "meta": {
@@ -74,5 +94,6 @@
         }
       ]
     }
-  ]
+  ],
+  "schemaVersion": 0
 }

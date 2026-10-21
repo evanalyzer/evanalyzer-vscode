@@ -1,6 +1,6 @@
 import { findNodeAtLocation, getNodePath, getNodeValue, type Node as JsoncNode } from "jsonc-parser";
 import type { JsonPath } from "../schema/schemaAtPath";
-import { componentDefinitions, describeDefinition, type ComponentDefinitionInfo } from "./componentIndex";
+import { moduleDefinitions, describeDefinition, type ModuleDefinitionInfo } from "./moduleIndex";
 
 export type IssueSeverity = "error" | "warning";
 
@@ -15,29 +15,29 @@ export interface ReferenceIssue {
  * Cross-reference checks JSON Schema can't express - everything here is
  * "this value must match something defined elsewhere in the file":
  *
- * - a component step's `key` names a defined component (and not the
- *   component the step belongs to), and its `values` only set parameters
- *   that component has;
- * - a component parameter's bindings point at a step id of that component;
+ * - a module step's `key` names a defined module (and not the
+ *   module the step belongs to), and its `values` only set parameters
+ *   that module has;
+ * - a module parameter's bindings point at a step id of that module;
  * - ids/keys that must be unique in their list (class ids, pipeline ids,
- *   step ids, component keys, parameter keys) are;
- * - `{"LOCAL": n}` classes are only used inside a component definition
+ *   step ids, module keys, parameter keys) are;
+ * - `{"LOCAL": n}` classes are only used inside a module definition
  *   that has local class `n`, and `{"GLOBAL": n}` classes in a project or
  *   project template exist in `classification.classes` (not checked in a
- *   `.evacomp`, whose global classes belong to whichever project it's
+ *   `.evamodule`, whose global classes belong to whichever project it's
  *   inserted into).
  *
  * Severity follows how evanalyzer itself treats the problem on load: a
  * duplicate step id in a pipeline is renumbered (warning), the same in a
- * component definition is a load error, since its bindings refer to steps
+ * module definition is a load error, since its bindings refer to steps
  * by id.
  */
-export function checkReferences(tree: JsoncNode, isComponentFile: boolean): ReferenceIssue[] {
+export function checkReferences(tree: JsoncNode, isModuleFile: boolean): ReferenceIssue[] {
   const issues: ReferenceIssue[] = [];
-  const usable = new Map(componentDefinitions(tree, isComponentFile).map((d) => [d.key, d]));
-  const scopes = definitionScopes(tree, isComponentFile);
+  const usable = new Map(moduleDefinitions(tree, isModuleFile).map((d) => [d.key, d]));
+  const scopes = definitionScopes(tree, isModuleFile);
 
-  checkUnique(tree, [isComponentFile ? "uses" : "components"], "key", "component key", issues);
+  checkUnique(tree, [isModuleFile ? "uses" : "modules"], "key", "module key", issues);
   for (const scope of scopes) {
     checkUnique(tree, [...scope.path, "classes"], "id", "class id", issues);
     checkUnique(tree, [...scope.path, "parameters"], "key", "parameter key", issues);
@@ -45,7 +45,7 @@ export function checkReferences(tree: JsoncNode, isComponentFile: boolean): Refe
     checkBindings(tree, scope, issues);
   }
 
-  if (!isComponentFile) {
+  if (!isModuleFile) {
     checkUnique(tree, ["classification", "classes"], "id", "class id", issues);
     checkUnique(tree, ["pipelines"], "id", "pipeline id", issues);
     const pipelines = findNodeAtLocation(tree, ["pipelines"]);
@@ -54,14 +54,14 @@ export function checkReferences(tree: JsoncNode, isComponentFile: boolean): Refe
     }
   }
 
-  checkClassReferences(tree, isComponentFile, scopes, issues);
+  checkClassReferences(tree, isModuleFile, scopes, issues);
   return issues;
 }
 
-/** Every component definition in the file - including a `.evacomp` root - with the path it sits at. */
-function definitionScopes(tree: JsoncNode, isComponentFile: boolean): ComponentDefinitionInfo[] {
-  const scopes = componentDefinitions(tree, isComponentFile);
-  if (isComponentFile) {
+/** Every module definition in the file - including a `.evamodule` root - with the path it sits at. */
+function definitionScopes(tree: JsoncNode, isModuleFile: boolean): ModuleDefinitionInfo[] {
+  const scopes = moduleDefinitions(tree, isModuleFile);
+  if (isModuleFile) {
     const root = describeDefinition(getNodeValue(tree), []);
     if (root) {
       scopes.unshift(root);
@@ -88,8 +88,8 @@ function checkUnique(tree: JsoncNode, arrayPath: JsonPath, field: string, what: 
 function checkSteps(
   tree: JsoncNode,
   stepsPath: JsonPath,
-  usable: Map<string, ComponentDefinitionInfo>,
-  owner: ComponentDefinitionInfo | undefined,
+  usable: Map<string, ModuleDefinitionInfo>,
+  owner: ModuleDefinitionInfo | undefined,
   duplicateIdSeverity: IssueSeverity,
   issues: ReferenceIssue[]
 ): void {
@@ -102,53 +102,53 @@ function checkSteps(
       if (seenIds.has(id)) {
         const message =
           duplicateIdSeverity === "error"
-            ? `Duplicate step id ${id} - this component's parameter bindings can't tell which step they set.`
+            ? `Duplicate step id ${id} - this module's parameter bindings can't tell which step they set.`
             : `Duplicate step id ${id} - evanalyzer renumbers it on load.`;
         issues.push(issueAt(idNode, message, duplicateIdSeverity));
       }
       seenIds.add(id);
     }
 
-    const keyNode = findNodeAtLocation(step, ["component", "key"]);
+    const keyNode = findNodeAtLocation(step, ["module", "key"]);
     const key = keyNode ? getNodeValue(keyNode) : undefined;
     if (!keyNode || typeof key !== "string") {
       continue;
     }
     if (owner && key === owner.key) {
-      issues.push(issueAt(keyNode, `Component "${key}" can't use itself.`, "error"));
+      issues.push(issueAt(keyNode, `Module "${key}" can't use itself.`, "error"));
       continue;
     }
     const definition = usable.get(key);
     if (!definition) {
-      issues.push(issueAt(keyNode, `Unknown component "${key}".`, "error"));
+      issues.push(issueAt(keyNode, `Unknown module "${key}".`, "error"));
       continue;
     }
 
     const parameterKeys = new Set(definition.parameters.map((p) => p.key));
-    for (const property of findNodeAtLocation(step, ["component", "values"])?.children ?? []) {
+    for (const property of findNodeAtLocation(step, ["module", "values"])?.children ?? []) {
       const nameNode = property.children?.[0];
       if (nameNode && typeof nameNode.value === "string" && !parameterKeys.has(nameNode.value)) {
-        issues.push(issueAt(nameNode, `Component "${key}" has no parameter "${nameNode.value}".`, "warning"));
+        issues.push(issueAt(nameNode, `Module "${key}" has no parameter "${nameNode.value}".`, "warning"));
       }
     }
   }
 }
 
-function checkBindings(tree: JsoncNode, scope: ComponentDefinitionInfo, issues: ReferenceIssue[]): void {
+function checkBindings(tree: JsoncNode, scope: ModuleDefinitionInfo, issues: ReferenceIssue[]): void {
   const stepIds = new Set(scope.steps.map((s) => s.id));
   for (const parameter of findNodeAtLocation(tree, [...scope.path, "parameters"])?.children ?? []) {
     for (const binding of findNodeAtLocation(parameter, ["bindings"])?.children ?? []) {
       const stepNode = findNodeAtLocation(binding, ["step"]);
       const step = stepNode ? getNodeValue(stepNode) : undefined;
       if (stepNode && typeof step === "number" && !stepIds.has(step)) {
-        issues.push(issueAt(stepNode, `Component "${scope.key}" has no step with id ${step}.`, "error"));
+        issues.push(issueAt(stepNode, `Module "${scope.key}" has no step with id ${step}.`, "error"));
       }
     }
   }
 }
 
-function checkClassReferences(tree: JsoncNode, isComponentFile: boolean, scopes: ComponentDefinitionInfo[], issues: ReferenceIssue[]): void {
-  const globalIds = isComponentFile ? undefined : classIds(tree, ["classification", "classes"]);
+function checkClassReferences(tree: JsoncNode, isModuleFile: boolean, scopes: ModuleDefinitionInfo[], issues: ReferenceIssue[]): void {
+  const globalIds = isModuleFile ? undefined : classIds(tree, ["classification", "classes"]);
 
   walk(tree, (node) => {
     if (node.type !== "object" || node.children?.length !== 1) {
@@ -164,9 +164,9 @@ function checkClassReferences(tree: JsoncNode, isComponentFile: boolean, scopes:
     if (nameNode.value === "LOCAL") {
       const scope = innermostScope(scopes, getNodePath(node));
       if (!scope) {
-        issues.push(issueAt(node, "LOCAL classes are only valid inside a component definition.", "error"));
+        issues.push(issueAt(node, "LOCAL classes are only valid inside a module definition.", "error"));
       } else if (!scope.classIds.includes(id)) {
-        issues.push(issueAt(valueNode, `Component "${scope.key}" has no local class with id ${id}.`, "warning"));
+        issues.push(issueAt(valueNode, `Module "${scope.key}" has no local class with id ${id}.`, "warning"));
       }
     } else if (nameNode.value === "GLOBAL" && globalIds && !globalIds.has(id)) {
       issues.push(issueAt(valueNode, `No class with id ${id} in classification.classes.`, "warning"));
@@ -174,8 +174,8 @@ function checkClassReferences(tree: JsoncNode, isComponentFile: boolean, scopes:
   });
 }
 
-function innermostScope(scopes: ComponentDefinitionInfo[], path: JsonPath): ComponentDefinitionInfo | undefined {
-  let best: ComponentDefinitionInfo | undefined;
+function innermostScope(scopes: ModuleDefinitionInfo[], path: JsonPath): ModuleDefinitionInfo | undefined {
+  let best: ModuleDefinitionInfo | undefined;
   for (const scope of scopes) {
     const isPrefix = scope.path.every((segment, i) => path[i] === segment);
     if (isPrefix && (!best || scope.path.length > best.path.length)) {

@@ -14,7 +14,7 @@ cd "$(dirname "$0")"
 EVANALYZER_DIR="${EVANALYZER_DIR:-../evanalyzer}"
 DOCS_DIR="${EVANALYZER_DIR}/docs"
 
-for file in project.schema.json project_template.schema.json component_template.schema.json ai_learning.schema.json; do
+for file in project.schema.json project_template.schema.json module_template.schema.json ai_learning.schema.json; do
   cp "${DOCS_DIR}/${file}" "schemas/${file}"
 done
 

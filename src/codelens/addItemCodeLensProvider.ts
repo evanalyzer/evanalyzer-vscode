@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import { getNodePath, parseTree, type Node as JsoncNode } from "jsonc-parser";
-import { COMPONENT_TEMPLATE, fileTypeForFileName } from "../fileTypes";
+import { MODULE_TEMPLATE, fileTypeForFileName } from "../fileTypes";
 import {
   isClassArray,
-  isComponentDefinitionsArray,
+  isModuleDefinitionsArray,
   isParametersArray,
   isPipelinesArray,
   isStepsArray,
@@ -11,8 +11,8 @@ import {
 import type { JsonPath } from "../schema/schemaAtPath";
 
 /**
- * "+ Add X" buttons above the classes / pipelines / steps / component
- * definitions / component parameters arrays. Located by JSON path (see
+ * "+ Add X" buttons above the classes / pipelines / steps / module
+ * definitions / module parameters arrays. Located by JSON path (see
  * schema/locations.ts) rather than a full schema walk, since these array
  * locations are fixed and well-known.
  */
@@ -22,7 +22,7 @@ export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
     if (!fileType) {
       return [];
     }
-    const isComponentFile = fileType === COMPONENT_TEMPLATE;
+    const isModuleFile = fileType === MODULE_TEMPLATE;
 
     const tree = parseTree(document.getText());
     if (!tree) {
@@ -45,15 +45,15 @@ export class AddItemCodeLensProvider implements vscode.CodeLensProvider {
       const lens = (title: string, command: string, args: unknown[] = [document.uri, arrayPath]) =>
         lenses.push(new vscode.CodeLens(range, { title, command, arguments: args }));
 
-      if (isClassArray(arrayPath, isComponentFile)) {
+      if (isClassArray(arrayPath, isModuleFile)) {
         lens("$(add) Add Class", "evanalyzer.addClass");
-      } else if (isPipelinesArray(arrayPath, isComponentFile)) {
+      } else if (isPipelinesArray(arrayPath, isModuleFile)) {
         lens("$(add) Add Pipeline", "evanalyzer.addPipeline");
-      } else if (isComponentDefinitionsArray(arrayPath, isComponentFile)) {
-        lens("$(add) Add Component Definition", "evanalyzer.addComponentDefinition");
-      } else if (isParametersArray(arrayPath, isComponentFile)) {
-        lens("$(add) Add Parameter", "evanalyzer.addComponentParameter");
-      } else if (isStepsArray(arrayPath, isComponentFile)) {
+      } else if (isModuleDefinitionsArray(arrayPath, isModuleFile)) {
+        lens("$(add) Add Module Definition", "evanalyzer.addModuleDefinition");
+      } else if (isParametersArray(arrayPath, isModuleFile)) {
+        lens("$(add) Add Parameter", "evanalyzer.addModuleParameter");
+      } else if (isStepsArray(arrayPath, isModuleFile)) {
         pushStepLenses(document, valueNode, arrayPath, lenses);
       }
     });
@@ -79,8 +79,8 @@ function pushStepLenses(document: vscode.TextDocument, arrayNode: JsoncNode, arr
         arguments: [document.uri, arrayPath, ...extraArgs],
       }),
       new vscode.CodeLens(range, {
-        title: "$(symbol-module) Use Component",
-        command: "evanalyzer.addComponentStep",
+        title: "$(symbol-module) Use Module",
+        command: "evanalyzer.addModuleStep",
         arguments: [document.uri, arrayPath, ...extraArgs],
       })
     );

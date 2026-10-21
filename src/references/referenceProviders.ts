@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { parseTree } from "jsonc-parser";
-import { AI_LEARNING_SETTINGS, COMPONENT_TEMPLATE, fileTypeForFileName } from "../fileTypes";
-import { componentCompletions } from "./componentCompletions";
+import { AI_LEARNING_SETTINGS, MODULE_TEMPLATE, fileTypeForFileName } from "../fileTypes";
+import { moduleCompletions } from "./moduleCompletions";
 import { checkReferences } from "./referenceChecks";
 
 const DIAGNOSTIC_DELAY_MS = 300;
@@ -9,7 +9,7 @@ const DIAGNOSTIC_DELAY_MS = 300;
 /**
  * Publishes `checkReferences` results as diagnostics for open EVAnalyzer
  * documents, re-checking (debounced) as they change. Not for AI learning
- * settings files, which have no components or class references to check.
+ * settings files, which have no modules or class references to check.
  */
 export function registerReferenceDiagnostics(context: vscode.ExtensionContext): void {
   const collection = vscode.languages.createDiagnosticCollection("evanalyzer");
@@ -25,7 +25,7 @@ export function registerReferenceDiagnostics(context: vscode.ExtensionContext): 
       collection.delete(document.uri);
       return;
     }
-    const diagnostics = checkReferences(tree, fileType === COMPONENT_TEMPLATE).map((issue) => {
+    const diagnostics = checkReferences(tree, fileType === MODULE_TEMPLATE).map((issue) => {
       const range = new vscode.Range(document.positionAt(issue.offset), document.positionAt(issue.offset + issue.length));
       const severity = issue.severity === "error" ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning;
       const diagnostic = new vscode.Diagnostic(range, issue.message, severity);
@@ -60,13 +60,13 @@ export function registerReferenceDiagnostics(context: vscode.ExtensionContext): 
   vscode.workspace.textDocuments.forEach(refresh);
 }
 
-export class ComponentCompletionProvider implements vscode.CompletionItemProvider {
+export class ModuleCompletionProvider implements vscode.CompletionItemProvider {
   provideCompletionItems(document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const fileType = fileTypeForFileName(document.fileName);
     if (!fileType) {
       return [];
     }
-    return componentCompletions(document.getText(), document.offsetAt(position), fileType === COMPONENT_TEMPLATE).map((suggestion) => {
+    return moduleCompletions(document.getText(), document.offsetAt(position), fileType === MODULE_TEMPLATE).map((suggestion) => {
       const item = new vscode.CompletionItem(suggestion.label, vscode.CompletionItemKind.Reference);
       item.insertText = suggestion.insertText;
       item.detail = suggestion.detail;

@@ -2,9 +2,9 @@ import { parseTree } from "jsonc-parser";
 import { describe, expect, it } from "vitest";
 import { checkReferences } from "./referenceChecks";
 
-function check(value: unknown, isComponentFile = false) {
+function check(value: unknown, isModuleFile = false) {
   const text = JSON.stringify(value);
-  return checkReferences(parseTree(text)!, isComponentFile).map((issue) => ({
+  return checkReferences(parseTree(text)!, isModuleFile).map((issue) => ({
     text: text.slice(issue.offset, issue.offset + issue.length),
     message: issue.message,
     severity: issue.severity,
@@ -26,12 +26,12 @@ describe("checkReferences", () => {
   it("accepts a consistent project", () => {
     const project = {
       classification: { classes: [{ id: 1 }, { id: 2 }] },
-      components: [smooth],
+      modules: [smooth],
       pipelines: [
         {
           id: 0,
           steps: [
-            { id: 1, enabled: true, component: { key: "SMOOTH", values: { kernel: 5 } } },
+            { id: 1, enabled: true, module: { key: "SMOOTH", values: { kernel: 5 } } },
             { id: 2, enabled: true, command: { type: "CLASSIFY_OBJECTS", inputClasses: [{ GLOBAL: 2 }] } },
           ],
         },
@@ -40,38 +40,38 @@ describe("checkReferences", () => {
     expect(check(project)).toEqual([]);
   });
 
-  it("flags an unknown component key and an unknown parameter", () => {
+  it("flags an unknown module key and an unknown parameter", () => {
     const issues = check({
-      components: [smooth],
+      modules: [smooth],
       pipelines: [
         {
           id: 0,
           steps: [
-            { id: 1, component: { key: "MISSING" } },
-            { id: 2, component: { key: "SMOOTH", values: { kernel: 5, sigma: 1 } } },
+            { id: 1, module: { key: "MISSING" } },
+            { id: 2, module: { key: "SMOOTH", values: { kernel: 5, sigma: 1 } } },
           ],
         },
       ],
     });
     expect(issues).toEqual([
-      { text: '"MISSING"', message: 'Unknown component "MISSING".', severity: "error" },
-      { text: '"sigma"', message: 'Component "SMOOTH" has no parameter "sigma".', severity: "warning" },
+      { text: '"MISSING"', message: 'Unknown module "MISSING".', severity: "error" },
+      { text: '"sigma"', message: 'Module "SMOOTH" has no parameter "sigma".', severity: "warning" },
     ]);
   });
 
-  it("flags a component that uses itself", () => {
-    const issues = check({ components: [{ ...smooth, steps: [{ id: 1, component: { key: "SMOOTH" } }], parameters: [] }] });
-    expect(issues.map((i) => i.message)).toContain('Component "SMOOTH" can\'t use itself.');
+  it("flags a module that uses itself", () => {
+    const issues = check({ modules: [{ ...smooth, steps: [{ id: 1, module: { key: "SMOOTH" } }], parameters: [] }] });
+    expect(issues.map((i) => i.message)).toContain('Module "SMOOTH" can\'t use itself.');
   });
 
-  it("flags a binding to a step id the component doesn't have", () => {
-    const issues = check({ components: [{ ...smooth, parameters: [{ key: "k", bindings: [{ step: 9, param: "x" }] }] }] });
-    expect(issues).toEqual([{ text: "9", message: 'Component "SMOOTH" has no step with id 9.', severity: "error" }]);
+  it("flags a binding to a step id the module doesn't have", () => {
+    const issues = check({ modules: [{ ...smooth, parameters: [{ key: "k", bindings: [{ step: 9, param: "x" }] }] }] });
+    expect(issues).toEqual([{ text: "9", message: 'Module "SMOOTH" has no step with id 9.', severity: "error" }]);
   });
 
-  it("treats duplicate step ids as an error in a component but a warning in a pipeline, and ignores unassigned 0s", () => {
+  it("treats duplicate step ids as an error in a module but a warning in a pipeline, and ignores unassigned 0s", () => {
     const issues = check({
-      components: [{ key: "A", steps: [{ id: 1 }, { id: 1 }], parameters: [] }],
+      modules: [{ key: "A", steps: [{ id: 1 }, { id: 1 }], parameters: [] }],
       pipelines: [{ id: 0, steps: [{ id: 3 }, { id: 3 }, { id: 0 }, { id: 0 }] }],
     });
     expect(issues.map((i) => [i.text, i.severity])).toEqual([
@@ -80,28 +80,28 @@ describe("checkReferences", () => {
     ]);
   });
 
-  it("flags duplicate class ids, pipeline ids, component keys and parameter keys", () => {
+  it("flags duplicate class ids, pipeline ids, module keys and parameter keys", () => {
     const issues = check({
       classification: { classes: [{ id: 1 }, { id: 1 }] },
-      components: [
+      modules: [
         { key: "A", parameters: [{ key: "p" }, { key: "p" }] },
         { key: "A", parameters: [] },
       ],
       pipelines: [{ id: 0 }, { id: 0 }],
     });
     expect(issues.map((i) => i.message).sort()).toEqual(
-      ['Duplicate class id 1.', 'Duplicate component key "A".', 'Duplicate parameter key "p".', "Duplicate pipeline id 0."].sort()
+      ['Duplicate class id 1.', 'Duplicate module key "A".', 'Duplicate parameter key "p".', "Duplicate pipeline id 0."].sort()
     );
   });
 
-  it("flags LOCAL classes outside a component, and ones the component doesn't define", () => {
+  it("flags LOCAL classes outside a module, and ones the module doesn't define", () => {
     const issues = check({
-      components: [{ key: "A", classes: [{ id: 1 }], steps: [{ id: 1, command: { outputClass: { LOCAL: 4 } } }], parameters: [] }],
+      modules: [{ key: "A", classes: [{ id: 1 }], steps: [{ id: 1, command: { outputClass: { LOCAL: 4 } } }], parameters: [] }],
       pipelines: [{ id: 0, steps: [{ id: 1, command: { outputClass: { LOCAL: 1 } } }] }],
     });
     expect(issues).toEqual([
-      { text: "4", message: 'Component "A" has no local class with id 4.', severity: "warning" },
-      { text: '{"LOCAL":1}', message: "LOCAL classes are only valid inside a component definition.", severity: "error" },
+      { text: "4", message: 'Module "A" has no local class with id 4.', severity: "warning" },
+      { text: '{"LOCAL":1}', message: "LOCAL classes are only valid inside a module definition.", severity: "error" },
     ]);
   });
 
@@ -110,26 +110,26 @@ describe("checkReferences", () => {
     expect(issues).toEqual([{ text: "7", message: "No class with id 7 in classification.classes.", severity: "warning" }]);
   });
 
-  describe("in a .evacomp", () => {
-    it("resolves component steps against uses, checks the root's own bindings/LOCAL classes, and skips GLOBAL checks", () => {
-      const component = {
+  describe("in a .evamodule", () => {
+    it("resolves module steps against uses, checks the root's own bindings/LOCAL classes, and skips GLOBAL checks", () => {
+      const module = {
         ...smooth,
         key: "ROOT",
-        steps: [...smooth.steps, { id: 3, component: { key: "SMOOTH", values: { kernel: 1 } } }, { id: 4, command: { c: { GLOBAL: 99 } } }],
+        steps: [...smooth.steps, { id: 3, module: { key: "SMOOTH", values: { kernel: 1 } } }, { id: 4, command: { c: { GLOBAL: 99 } } }],
         uses: [smooth],
       };
-      expect(check(component, true)).toEqual([]);
+      expect(check(module, true)).toEqual([]);
     });
 
-    it("scopes LOCAL classes to the innermost component definition", () => {
-      const component = {
+    it("scopes LOCAL classes to the innermost module definition", () => {
+      const module = {
         key: "ROOT",
         classes: [{ id: 1 }],
         steps: [],
         parameters: [],
         uses: [{ key: "INNER", classes: [{ id: 2 }], steps: [{ id: 1, command: { c: { LOCAL: 1 } } }], parameters: [] }],
       };
-      expect(check(component, true).map((i) => i.message)).toEqual(['Component "INNER" has no local class with id 1.']);
+      expect(check(module, true).map((i) => i.message)).toEqual(['Module "INNER" has no local class with id 1.']);
     });
   });
 });

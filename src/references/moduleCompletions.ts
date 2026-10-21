@@ -1,7 +1,7 @@
 import { getLocation, parseTree, type Node as JsoncNode } from "jsonc-parser";
-import { isStepsArray, owningComponentPath } from "../schema/locations";
+import { isStepsArray, owningModulePath } from "../schema/locations";
 import type { JsonPath } from "../schema/schemaAtPath";
-import { componentDefinitions, describeDefinition, findComponentDefinition, valueAt } from "./componentIndex";
+import { moduleDefinitions, describeDefinition, findModuleDefinition, valueAt } from "./moduleIndex";
 
 export interface CompletionSuggestion {
   label: string;
@@ -16,12 +16,12 @@ export interface CompletionSuggestion {
  * Completions for values that refer to something defined elsewhere in the
  * file, which the JSON Schema can only type as "a string"/"an integer":
  *
- * - a component step's `"key"` - the defined components;
- * - a property name in a component step's `"values"` - that component's
+ * - a module step's `"key"` - the defined modules;
+ * - a property name in a module step's `"values"` - that module's
  *   parameters (inserted with their default when nothing is typed yet);
- * - a parameter binding's `"step"` - the ids of the component's steps.
+ * - a parameter binding's `"step"` - the ids of the module's steps.
  */
-export function componentCompletions(text: string, offset: number, isComponentFile: boolean): CompletionSuggestion[] {
+export function moduleCompletions(text: string, offset: number, isModuleFile: boolean): CompletionSuggestion[] {
   const tree = parseTree(text);
   if (!tree) {
     return [];
@@ -32,13 +32,13 @@ export function componentCompletions(text: string, offset: number, isComponentFi
   const replace = typed ? { offset: typed.offset, length: typed.length } : undefined;
   const at = (back: number) => path[path.length - back];
 
-  // path: [...steps, i, "component", "key"]
-  if (!location.isAtPropertyKey && at(1) === "key" && at(2) === "component" && isStepsArray(path.slice(0, -3), isComponentFile)) {
-    return componentKeySuggestions(tree, path.slice(0, -3), isComponentFile, replace);
+  // path: [...steps, i, "module", "key"]
+  if (!location.isAtPropertyKey && at(1) === "key" && at(2) === "module" && isStepsArray(path.slice(0, -3), isModuleFile)) {
+    return moduleKeySuggestions(tree, path.slice(0, -3), isModuleFile, replace);
   }
-  // path: [...steps, i, "component", "values", <key being typed>]
-  if (location.isAtPropertyKey && at(2) === "values" && at(3) === "component" && isStepsArray(path.slice(0, -4), isComponentFile)) {
-    return parameterSuggestions(tree, path.slice(0, -2), isComponentFile, typed, replace);
+  // path: [...steps, i, "module", "values", <key being typed>]
+  if (location.isAtPropertyKey && at(2) === "values" && at(3) === "module" && isStepsArray(path.slice(0, -4), isModuleFile)) {
+    return parameterSuggestions(tree, path.slice(0, -2), isModuleFile, typed, replace);
   }
   // path: [...definition, "parameters", j, "bindings", k, "step"]
   if (!location.isAtPropertyKey && at(1) === "step" && at(3) === "bindings" && at(5) === "parameters") {
@@ -47,15 +47,15 @@ export function componentCompletions(text: string, offset: number, isComponentFi
   return [];
 }
 
-function componentKeySuggestions(
+function moduleKeySuggestions(
   tree: JsoncNode,
   stepsPath: JsonPath,
-  isComponentFile: boolean,
+  isModuleFile: boolean,
   replace: CompletionSuggestion["replace"]
 ): CompletionSuggestion[] {
-  const ownerPath = owningComponentPath(stepsPath, isComponentFile);
+  const ownerPath = owningModulePath(stepsPath, isModuleFile);
   const ownKey = ownerPath ? valueAt(tree, [...ownerPath, "key"]) : undefined;
-  return componentDefinitions(tree, isComponentFile)
+  return moduleDefinitions(tree, isModuleFile)
     .filter((definition) => definition.key !== ownKey)
     .map((definition) => ({
       label: definition.key,
@@ -68,17 +68,17 @@ function componentKeySuggestions(
 
 function parameterSuggestions(
   tree: JsoncNode,
-  componentPath: JsonPath,
-  isComponentFile: boolean,
+  modulePath: JsonPath,
+  isModuleFile: boolean,
   typed: JsoncNode | undefined,
   replace: CompletionSuggestion["replace"]
 ): CompletionSuggestion[] {
-  const key = valueAt(tree, [...componentPath, "key"]);
-  const definition = typeof key === "string" ? findComponentDefinition(tree, key, isComponentFile) : undefined;
+  const key = valueAt(tree, [...modulePath, "key"]);
+  const definition = typeof key === "string" ? findModuleDefinition(tree, key, isModuleFile) : undefined;
   if (!definition) {
     return [];
   }
-  const values = valueAt(tree, [...componentPath, "values"]);
+  const values = valueAt(tree, [...modulePath, "values"]);
   const alreadySet = new Set(typeof values === "object" && values !== null ? Object.keys(values) : []);
   if (typed && typeof typed.value === "string") {
     alreadySet.delete(typed.value); // the key being typed right now

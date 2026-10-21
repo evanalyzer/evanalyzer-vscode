@@ -1,8 +1,8 @@
 {
   "name": "evanalyzer-file-support",
   "displayName": "EVAnalyzer File Support",
-  "description": "Syntax highlighting, JSON Schema validation/autocomplete, component reference checks, and schema-driven creation wizards for EVAnalyzer .evaproj, .evapt, and .evacomp files.",
-  "version": "0.3.0",
+  "description": "Syntax highlighting, JSON Schema validation/autocomplete, module reference checks, and schema-driven creation wizards for EVAnalyzer .evaproj, .evatemplate, and .evamodule files.",
+  "version": "0.4.0",
   "publisher": "evanalyzer",
   "engines": {
     "vscode": "^1.85.0"
@@ -25,8 +25,8 @@
         "id": "json",
         "extensions": [
           ".evaproj",
-          ".evapt",
-          ".evacomp"
+          ".evatemplate",
+          ".evamodule"
         ]
       }
     ],
@@ -36,12 +36,12 @@
         "url": "./schemas/project.editor.schema.json"
       },
       {
-        "fileMatch": "*.evapt",
+        "fileMatch": "*.evatemplate",
         "url": "./schemas/project_template.editor.schema.json"
       },
       {
-        "fileMatch": "*.evacomp",
-        "url": "./schemas/component_template.editor.schema.json"
+        "fileMatch": "*.evamodule",
+        "url": "./schemas/module_template.editor.schema.json"
       },
       {
         "fileMatch": "*.ailearning.json",
@@ -60,8 +60,8 @@
         "category": "EVAnalyzer"
       },
       {
-        "command": "evanalyzer.newComponent",
-        "title": "New EVAnalyzer Component...",
+        "command": "evanalyzer.newModule",
+        "title": "New EVAnalyzer Module...",
         "category": "EVAnalyzer"
       },
       {
@@ -87,7 +87,7 @@
           "group": "1_evanalyzer@2"
         },
         {
-          "command": "evanalyzer.newComponent",
+          "command": "evanalyzer.newModule",
           "group": "1_evanalyzer@3"
         },
         {

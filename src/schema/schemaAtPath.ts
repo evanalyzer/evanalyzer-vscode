@@ -13,7 +13,7 @@ export type JsonPath = (string | number)[];
  * Understands the discriminator shapes these schemas actually use:
  * schemars' internally-tagged `properties.type.const` pattern (used by
  * PipelineCommand and similar), externally tagged variants recognised by
- * their single required key (`{"command": ...}` / `{"component": ...}`,
+ * their single required key (`{"command": ...}` / `{"module": ...}`,
  * `{"GLOBAL": 3}`), and `anyOf: [T, {type: "null"}]` for Rust's
  * `Option<T>`. A branch that uses none of them (e.g. a bare string/const
  * enum variant) is left unresolved - that just means no defaultable

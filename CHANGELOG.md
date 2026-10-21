@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+Follows evanalyzer's rename of components to modules (branch `ai-plugin`).
+
+- **Breaking:** `.evapt` → `.evatemplate` and `.evacomp` → `.evamodule`;
+  the old extensions are no longer recognised. `New Component...` is now
+  `New Module...` (`evanalyzer.newModule`).
+- Schema rename followed throughout: `component_template.schema.json` →
+  `module_template.schema.json`, `components` → `modules` in
+  projects/templates, and `"component": {...}` steps → `"module": {...}`.
+  CodeLens buttons, diagnostics, completions and quick fixes now say
+  "module" (Add Module Definition, Use Module).
+- Updated all bundled schemas, which also bring a project `editor` block
+  (Tuning panel pins, previewed/analysed images) and an optional
+  z-projection on Load Channel.
+
 ## 0.3.0
 
 Follows evanalyzer's component rework (branch `save-image`): pipeline

@@ -16,55 +16,55 @@ describe("AddItemCodeLensProvider", () => {
   });
 
   it("adds one 'Add Class' button above the classification classes array", () => {
-    const { document, lenses } = lensesFor({ classification: { classes: [{}, {}] } }, "test.evapt", "evanalyzer.addClass");
+    const { document, lenses } = lensesFor({ classification: { classes: [{}, {}] } }, "test.evatemplate", "evanalyzer.addClass");
     expect(lenses).toHaveLength(1);
     expect(lenses[0].command?.arguments).toEqual([document.uri, ["classification", "classes"]]);
   });
 
-  it("adds 'Add Class' to a component's local classes, but not to a SCRIPT command's classes", () => {
+  it("adds 'Add Class' to a module's local classes, but not to a SCRIPT command's classes", () => {
     const { lenses } = lensesFor(
-      { components: [{ classes: [], steps: [{ command: { type: "SCRIPT", classes: [] } }] }] },
+      { modules: [{ classes: [], steps: [{ command: { type: "SCRIPT", classes: [] } }] }] },
       "test.evaproj",
       "evanalyzer.addClass"
     );
-    expect(lenses.map((l) => l.command?.arguments?.[1])).toEqual([["components", 0, "classes"]]);
+    expect(lenses.map((l) => l.command?.arguments?.[1])).toEqual([["modules", 0, "classes"]]);
   });
 
-  it("adds 'Add Class' at a .evacomp root and in its used components", () => {
-    const { lenses } = lensesFor({ classes: [], uses: [{ classes: [] }] }, "test.evacomp", "evanalyzer.addClass");
+  it("adds 'Add Class' at a .evamodule root and in its used modules", () => {
+    const { lenses } = lensesFor({ classes: [], uses: [{ classes: [] }] }, "test.evamodule", "evanalyzer.addClass");
     expect(lenses.map((l) => l.command?.arguments?.[1])).toEqual([["classes"], ["uses", 0, "classes"]]);
   });
 
   it("adds one 'Add Pipeline' button above the top-level pipelines array only", () => {
-    const { document, lenses } = lensesFor({ pipelines: [{ steps: [] }] }, "test.evapt", "evanalyzer.addPipeline");
+    const { document, lenses } = lensesFor({ pipelines: [{ steps: [] }] }, "test.evatemplate", "evanalyzer.addPipeline");
     expect(lenses).toHaveLength(1);
     expect(lenses[0].command?.arguments).toEqual([document.uri, ["pipelines"]]);
   });
 
-  it("adds 'Add Component Definition' to components (projects) and uses (.evacomp)", () => {
-    expect(lensesFor({ components: [] }, "p.evaproj", "evanalyzer.addComponentDefinition").lenses).toHaveLength(1);
-    expect(lensesFor({ uses: [] }, "c.evacomp", "evanalyzer.addComponentDefinition").lenses).toHaveLength(1);
-    expect(lensesFor({ components: [] }, "c.evacomp", "evanalyzer.addComponentDefinition").lenses).toHaveLength(0);
+  it("adds 'Add Module Definition' to modules (projects) and uses (.evamodule)", () => {
+    expect(lensesFor({ modules: [] }, "p.evaproj", "evanalyzer.addModuleDefinition").lenses).toHaveLength(1);
+    expect(lensesFor({ uses: [] }, "c.evamodule", "evanalyzer.addModuleDefinition").lenses).toHaveLength(1);
+    expect(lensesFor({ modules: [] }, "c.evamodule", "evanalyzer.addModuleDefinition").lenses).toHaveLength(0);
   });
 
-  it("adds 'Add Parameter' to a component definition's parameters", () => {
-    const { lenses } = lensesFor({ parameters: [], uses: [{ parameters: [] }] }, "c.evacomp", "evanalyzer.addComponentParameter");
+  it("adds 'Add Parameter' to a module definition's parameters", () => {
+    const { lenses } = lensesFor({ parameters: [], uses: [{ parameters: [] }] }, "c.evamodule", "evanalyzer.addModuleParameter");
     expect(lenses.map((l) => l.command?.arguments?.[1])).toEqual([["parameters"], ["uses", 0, "parameters"]]);
   });
 
-  it("gives an empty steps array exactly one (append) Add Pipeline Command and one Use Component button", () => {
-    const { document, lenses } = lensesFor({ steps: [] }, "test.evacomp");
+  it("gives an empty steps array exactly one (append) Add Pipeline Command and one Use Module button", () => {
+    const { document, lenses } = lensesFor({ steps: [] }, "test.evamodule");
     const commandLenses = lenses.filter((l) => l.command?.command === "evanalyzer.addPipelineCommand");
-    const componentLenses = lenses.filter((l) => l.command?.command === "evanalyzer.addComponentStep");
+    const moduleLenses = lenses.filter((l) => l.command?.command === "evanalyzer.addModuleStep");
     expect(commandLenses).toHaveLength(1);
-    expect(componentLenses).toHaveLength(1);
+    expect(moduleLenses).toHaveLength(1);
     expect(commandLenses[0].command?.arguments).toEqual([document.uri, ["steps"]]); // no index = append
   });
 
   it("gives an array of N items exactly N+1 Add Pipeline Command buttons: one before each item, one to append", () => {
     const { document, lenses } = lensesFor(
       { steps: [{ command: { type: "BLUR" } }, { command: { type: "GAUSSIAN_BLUR" } }, { command: { type: "LAPLACIAN" } }] },
-      "test.evacomp",
+      "test.evamodule",
       "evanalyzer.addPipelineCommand"
     );
 
@@ -79,7 +79,7 @@ describe("AddItemCodeLensProvider", () => {
 
   it("anchors the trailing append button on the array's closing bracket, not above the first item", () => {
     const text = ["{", '  "steps": [', '    { "enabled": true, "command": { "type": "BLUR" } }', "  ]", "}"].join("\n");
-    const document = createTestDocument(text, "test.evacomp");
+    const document = createTestDocument(text, "test.evamodule");
     const lenses = provider.provideCodeLenses(document as never).filter((l) => l.command?.command === "evanalyzer.addPipelineCommand");
 
     expect(lenses).toHaveLength(2);
@@ -93,7 +93,7 @@ describe("AddItemCodeLensProvider", () => {
   it("gives each pipeline in a project template its own independent set of step buttons", () => {
     const { lenses } = lensesFor(
       { pipelines: [{ steps: [{ command: { type: "BLUR" } }] }, { steps: [] }] },
-      "test.evapt",
+      "test.evatemplate",
       "evanalyzer.addPipelineCommand"
     );
 

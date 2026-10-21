@@ -11,8 +11,8 @@ function loadSchema(fileName: string): RootSchemaFile {
   return JSON.parse(readFileSync(path.join(schemasDir, fileName), "utf8"));
 }
 
-describe("schemaAtPath against the real component_template schema", () => {
-  const root = loadSchema("component_template.schema.json");
+describe("schemaAtPath against the real module_template schema", () => {
+  const root = loadSchema("module_template.schema.json");
 
   it("resolves the merged, discriminator-selected schema for a chosen oneOf variant (BLUR)", () => {
     const tree = parseTree(JSON.stringify({ steps: [{ enabled: true, command: { type: "BLUR" } }] }))!;
@@ -44,15 +44,15 @@ describe("schemaAtPath against the real component_template schema", () => {
     expect(schema?.required).toEqual(expect.arrayContaining(["enabled", "command"]));
   });
 
-  it("picks the component variant of a step from its key, through to ComponentInstance", () => {
-    const tree = parseTree(JSON.stringify({ steps: [{ enabled: true, component: { key: "X" } }] }))!;
-    const schema = schemaAtPath(root, root.$defs, tree, ["steps", 0, "component"]);
+  it("picks the module variant of a step from its key, through to ModuleInstance", () => {
+    const tree = parseTree(JSON.stringify({ steps: [{ enabled: true, module: { key: "X" } }] }))!;
+    const schema = schemaAtPath(root, root.$defs, tree, ["steps", 0, "module"]);
 
     expect(schema?.required).toEqual(["key"]);
     expect(schema?.properties?.values?.default).toEqual({});
   });
 
-  it("still offers a step's shared fields before it has a command or component", () => {
+  it("still offers a step's shared fields before it has a command or module", () => {
     const tree = parseTree(JSON.stringify({ steps: [{}] }))!;
     const schema = schemaAtPath(root, root.$defs, tree, ["steps", 0]);
 
@@ -93,9 +93,9 @@ describe("schemaAtPath against the real project_template schema", () => {
     expect(schema?.properties?.id?.type).toBe("integer");
   });
 
-  it("resolves a component definition's steps the same way as a pipeline's", () => {
-    const tree = parseTree(JSON.stringify({ components: [{ steps: [{ command: { type: "BLUR" } }] }] }))!;
-    const schema = schemaAtPath(root, root.$defs, tree, ["components", 0, "steps", 0, "command"]);
+  it("resolves a module definition's steps the same way as a pipeline's", () => {
+    const tree = parseTree(JSON.stringify({ modules: [{ steps: [{ command: { type: "BLUR" } }] }] }))!;
+    const schema = schemaAtPath(root, root.$defs, tree, ["modules", 0, "steps", 0, "command"]);
     expect(schema?.properties?.kernelSize?.default).toBe(3);
   });
 });

@@ -75,7 +75,7 @@ export function primaryType(schema: JsonSchema): JsonType | undefined {
  * Splits a schema that has both its own keywords and a `oneOf`/`anyOf` -
  * how schemars writes an externally tagged enum flattened next to shared
  * fields, e.g. `PipelineStepSettings`: `id`/`enabled` in `properties`, and
- * `oneOf: [{command}, {component}]` - into the shared part and the
+ * `oneOf: [{command}, {module}]` - into the shared part and the
  * variants. `base` is undefined when the node has nothing besides the
  * variants (a plain enum such as `PipelineCommand` or `ObjectClass`).
  */
