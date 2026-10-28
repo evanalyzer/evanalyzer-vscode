@@ -69,11 +69,11 @@
   ],
   "$defs": {
     "AiObjectClassifierSettings": {
-      "description": "An object classifier trained via the app's AI training dialog (an\n`.evamodel` file - see `ai_learning::training::object::ObjectTrainingJob`),\napplied here as a pipeline classification step: every object already\npresent in `PipelineCache::object_cache` matching `origin_segmentation`/\n`input_classes` is scored independently (reusing the same feature recipe\nused at training time), then remapped through `segmentation_mapping` into\nthis project's own classes and applied via `match_handling` - the same\ninput selection `ClassifyObjects` uses, but the output class comes from\nthe model's prediction instead of a fixed rule.\n\nPredicted classes with no matching `segmentation_mapping` entry leave the\nobject untouched, mirroring how `PixelClassifier` leaves unmapped\npredictions as background - mapping only the classes you care about is a\ndeliberate simplification, not an oversight.",
+      "description": "Classifies objects with a model trained in the AI training dialog (an\n`.evamodel` file).\n\nEvery object found so far that matches the input classes is scored on\nits own, with the same features as in training - for the ring features\nthe ring around the object is measured here, as in training. The predicted class is\nmapped to one of this project's classes and applied as set under\n**Match handling** - the same input selection as **Classify Objects**,\nbut the class comes from the model's prediction instead of a fixed rule.\n\nA predicted class without a mapping leaves the object untouched (like\nunmapped classes of the pixel classifier stay background): map only the\nclasses you care about.",
       "type": "object",
       "properties": {
         "inputClasses": {
-          "description": "Restrict classification to objects that already carry one of these classes\n\nOnly ROIs that have been assigned at least one of the listed classes by a prior\npipeline step will be evaluated by the model. Leave empty to apply the model to\nevery object regardless of its current class.",
+          "description": "Restrict classification to objects that already carry one of these classes\n\nOnly ROIs that have been assigned at least one of the listed classes by a prior\npipeline step will be evaluated by the model.\nLeave empty to select the objects by their segmentation class only.\nWith neither input classes nor a segmentation class the step does nothing.",
           "type": "array",
           "default": [],
           "items": {
@@ -85,13 +85,21 @@
           "$ref": "#/$defs/ObjectAiObjectClassifierAiClassifyMatchHandlingSettings",
           "default": "RECLASSIFY_IF_MATCH"
         },
+        "minCertainty": {
+          "description": "Objects the model is less sure about than this are left as they are (0 = off).\nThe certainty is the share of trees (random forest) or neighbours (KNN) voting for the class, or the probability of the class (MLP).",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0
+        },
         "modelPath": {
           "description": "Path to a trained object classifier model, saved from the AI training dialog.",
           "type": "string",
           "default": ""
         },
         "originSegmentation": {
-          "description": "Apply only to objects with this given segmentation class\n\nThe segmentation class value is assigned to each pixel in the image\nafter a Threshold, Pixel classifier or AI classifier.\nIf no seg class is selected the criteria are applied to all objects.",
+          "description": "Apply only to objects with this given segmentation class\n\nThe segmentation class value is assigned to each pixel in the image\nafter a Threshold, Pixel classifier or AI classifier.\nLeave empty to select the objects by their input classes only.\nWith input classes too, an object must match both. Alone it also\nselects objects without a class left - the way to bring objects an\nearlier step removed back.",
           "type": "array",
           "default": [],
           "items": {
@@ -281,7 +289,7 @@
           "default": true
         },
         "inputClasses": {
-          "description": "Restrict classification to objects that already carry one of these classes\n\nOnly ROIs that have been assigned at least one of the listed classes by a prior\npipeline step will be evaluated against the morphological and intensity criteria below.\nLeave empty to apply the criteria to every object regardless of its current class.",
+          "description": "Restrict classification to objects that already carry one of these classes\n\nOnly ROIs that have been assigned at least one of the listed classes by a prior\npipeline step will be evaluated against the morphological and intensity criteria below.\nLeave empty to select the objects by their segmentation class only.\nWith neither input classes nor a segmentation class the step does nothing.",
           "type": "array",
           "default": [],
           "items": {
@@ -300,14 +308,6 @@
           "description": "What to do with object class labels after criteria evaluation\n\nControls whether the output class is added or existing classes are removed,\nand whether the action is triggered on a criteria **match** or a **non-match**:\n\n- **AddOutputClassIfMatch** - append the output class to objects that pass the criteria.\n- **AddOutputClassIfNotMatch** - append the output class to objects that fail the criteria.\n- **RemoveInputClassIfMatch / NotMatch** - strip all input classes from matching / non-matching objects.\n- **RemoveOutputClassIfMatch / NotMatch** - strip the output class from matching / non-matching objects.\n- **RemoveAllClassesIfMatch / NotMatch** - clear every class label from matching / non-matching objects.",
           "$ref": "#/$defs/ObjectClassifyObjectsClassifyMatchHandlingSettings",
           "default": "REMOVE_ALL_CLASSES_IF_NOT_MATCH"
-        },
-        "maxArea": {
-          "description": "Maximum area size\n\nMaximum area size of the object in selected unit (px^2 or nm^2).",
-          "type": "number",
-          "format": "float",
-          "default": 2147483648.0,
-          "maximum": 2147483600,
-          "minimum": 0
         },
         "maxAspectRatio": {
           "description": "Maximum proportional relationship between an object's width and its height\n\nThis value is calculated by the object bounding box with and height and is defined with `a = with/height`.\nThe value is without unit in the range of 0 to MAX_F32",
@@ -341,20 +341,20 @@
           "maximum": 2147483600,
           "minimum": 0
         },
+        "maxSize": {
+          "description": "Maximum size\n\nMaximum size of the object in the selected unit: its area in 2D\n(px² or nm²), its volume in 3D (px³ or nm³).",
+          "type": "number",
+          "format": "float",
+          "default": 2147483648.0,
+          "maximum": 2147483600,
+          "minimum": 0
+        },
         "maxSolidity": {
           "description": "Maximum Solidity/Compactness: 0 = hollow, 1 = perfect convex\n\nSolidity is a structural metric used in shape analysis to measure how \"solid\" or compact an object is.\nIt compares the actual area of an object to the area of its Convex Hull (the smallest convex polygon that can completely enclose the object,\noften visualized as a rubber band stretched around the shape).\n\nSolidity = 1.0: The object is perfectly convex (e.g., a perfect circle, a solid square, or an ellipse). It has no holes, indentations, or deep recesses.\nSolidity < 1.0: The object has irregular boundaries, deep \"bays,\" protrusions, or internal holes. The lower the value, the more jagged or structurally fragmented the object is.",
           "type": "number",
           "format": "float",
           "default": 1.0,
           "maximum": 1,
-          "minimum": 0
-        },
-        "minArea": {
-          "description": "Minimum area size\n\nMinimum area size of the object in selected unit (px^2 or nm^2).",
-          "type": "number",
-          "format": "float",
-          "default": 0.0,
-          "maximum": 2147483600,
           "minimum": 0
         },
         "minAspectRatio": {
@@ -389,8 +389,16 @@
           "maximum": 2147483600,
           "minimum": 0
         },
-        "minIntersectionArea": {
-          "description": "Minimum intersection area with an `overlapping_with` object, in `size_unit`\n\nHas no effect while `overlapping_with` is Unset.",
+        "minIntersectionSize": {
+          "description": "Minimum intersection size with an `overlapping_with` object, in `size_unit`\n\nAn area in 2D (px² or nm²), a volume in 3D (px³ or nm³).\nHas no effect while `overlapping_with` is Unset.",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 2147483600,
+          "minimum": 0
+        },
+        "minSize": {
+          "description": "Minimum size\n\nMinimum size of the object in the selected unit: its area in 2D\n(px² or nm²), its volume in 3D (px³ or nm³).",
           "type": "number",
           "format": "float",
           "default": 0.0,
@@ -406,7 +414,7 @@
           "minimum": 0
         },
         "originSegmentation": {
-          "description": "Apply only to objects with this given segmentation class\n\nThe segmentation class value is assigned to each pixel in the image\nafter a Threshold, Pixel classifier or AI classifier.\nIf no seg class is selected the criteria are applied to all objects.",
+          "description": "Apply only to objects with this given segmentation class\n\nThe segmentation class value is assigned to each pixel in the image\nafter a Threshold, Pixel classifier or AI classifier.\nLeave empty to select the objects by their input classes only.\nWith input classes too, an object must match both. Alone it also\nselects objects without a class left - the way to bring objects an\nearlier step removed back.",
           "type": "array",
           "default": [],
           "items": {
@@ -419,7 +427,7 @@
           "default": "UNSET"
         },
         "overlappingWith": {
-          "description": "Additional criterion: the object must intersect an object carrying this class\n\nIf unset (the default) this filter is not applied. When set, an object only\nsatisfies the overall criteria if it also overlaps at least one object carrying this\nclass by at least `min_intersection_area`. Combine with e.g.\n`RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\nor `AddOutputClassIfMatch` to tag objects that do.",
+          "description": "Additional criterion: the object must intersect an object carrying this class\n\nIf unset (the default) this filter is not applied. When set, an object only\nsatisfies the overall criteria if it also overlaps at least one object carrying this\nclass by at least `min_intersection_size`. Combine with e.g.\n`RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\nor `AddOutputClassIfMatch` to tag objects that do.",
           "$ref": "#/$defs/ObjectClass",
           "default": "UNSET"
         },
@@ -430,17 +438,22 @@
         }
       }
     },
-    "ColocalizationSettings": {
+    "ColocalizeObjectsSettings": {
       "description": "Calculates spatial colocalization and intersections between specified object classes.\n\nThis command scans the object cache, groups objects by their designated classes,\nand performs spatial overlap analysis. It records colocalization relationships\nbetween intersecting entities and can optionally generate new child ROIs representing\nthe precise intersection regions.",
       "type": "object",
       "properties": {
+        "allCombinations": {
+          "description": "Record every pair that overlaps, also of objects that don't overlap\nan object of each class: one step with A, B and C shows A∩B, A∩C,\nB∩C and A∩B∩C in the results' partner columns. Off: only the objects\noverlapping every other class record partners. \"As\" and the overlap\nregions always need every class.",
+          "type": "boolean",
+          "default": false
+        },
         "classForOverlappingAreas": {
-          "description": "Class of the overlapping area if needed\n\nIf defined the overlapping coloc area is added as new object and labeled with this class",
+          "description": "Class of the overlapping area if needed\n\nIf defined the overlapping coloc area is added as new object and labeled with this class.\nIt is the area all the objects share (A∩B∩C with three classes) - only\nmade where they really do: an A object overlapping a B and a C object\nthat don't touch each other is colocalized, but gets no overlap\nregion.",
           "$ref": "#/$defs/ObjectClass",
           "default": "UNSET"
         },
         "classesToColoc": {
-          "description": "Theses are the classes the coloclization should be calculated for",
+          "description": "The classes whose objects must overlap (e.g. the ch1 and the ch2\nspots): each object overlapping an object of every other class\nrecords them as its partners - listed and counted in the results.\n\nEach overlap counts on its own: with A, B and C, an A object\ncolocalizes when it overlaps a B object and a C object - also when\nthe B and the C object lie in different parts of it and don't touch\neach other. It doesn't mean all three share an area; that is the\noverlap region (\"Overlap regions as\").",
           "type": "array",
           "default": [],
           "items": {
@@ -463,26 +476,62 @@
             "$ref": "#/$defs/ObjectClass"
           }
         },
-        "minColocArea": {
-          "description": "Minimum overlapping area size to count objects as coloc",
+        "markAs": {
+          "description": "Optional: the class the colocalizing objects get (e.g. \"ch1 with\nch2\") - to count them per image or relate them to cells. `Unset`:\nonly the partners are recorded.\n\nMarked: the object overlaps an object of every other class, each on\nits own - not \"all of them share an area\" (see \"Colocalize\").",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "markObjectsOf": {
+          "description": "Optional: the objects of this class that colocalize also get the\nclass below (e.g. the ch1 spots overlapping a ch2 spot). `Unset`:\nthe colocalizing objects of every class.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "minColocSize": {
+          "description": "Minimum overlap to count objects as coloc - an area in 2D, a volume in 3D",
           "type": "number",
           "format": "float",
           "default": 0.0
         },
         "multiplicity": {
-          "description": "How many partners an object may coloc with at once.",
+          "description": "Which overlapping objects count as partners.",
           "$ref": "#/$defs/ObjectColocObjectsColocMultiplicitySettings",
-          "default": "ONE_TO_ONE"
+          "default": "MANY_TO_MANY"
         },
         "sizeUnit": {
-          "description": "Size unit for the minimum coloc area size",
+          "description": "Size unit for the minimum coloc size",
           "$ref": "#/$defs/SizeUnitsRel",
           "default": "PIXELS"
         }
       }
     },
+    "ColorDeconvolutionSettings": {
+      "description": "Separates a brightfield RGB image into its stains and keeps one as a\ngray image: how much of the stain each pixel has (0 = none, 255 in 8 bit\n= OD 2.55; the 8-bit value / 100 is the optical density).\n\nFor IHC: Stain 2 of H-DAB is the DAB (brown) signal - threshold it, or\nmeasure the DAB per nucleus found on Stain 1.",
+      "type": "object",
+      "properties": {
+        "background": {
+          "description": "The brightness of empty glass (no tissue), 0-255 whatever the image's\nbit depth - lower it when the scanner's background isn't pure white.",
+          "type": "number",
+          "format": "float",
+          "default": 255.0,
+          "maximum": 255,
+          "minimum": 1
+        },
+        "output": {
+          "description": "The stain the step keeps.",
+          "$ref": "#/$defs/FiltersColorDeconvolutionStainOutputSettings",
+          "default": "STAIN1"
+        },
+        "stains": {
+          "description": "The stains on the slide.",
+          "$ref": "#/$defs/FiltersColorDeconvolutionStainVectorsSettings",
+          "default": {
+            "type": "H_DAB"
+          }
+        }
+      }
+    },
     "ColorFilterCommandSettings": {
-      "description": "A command that filters an image based on a specific HSV color range.\n\nPixels falling outside the provided [`HsvRange`] are masked\nout by setting to black.\n\n# Examples\n\n```\n# use imagec::backend::algos::{ColorFilterCommand, HsvRange};\nlet range = HsvRange {\nmin_h: 0.0,   max_h: 30.0, // Red tones\nmin_s: 0.5,   max_s: 1.0,\nmin_v: 0.5,   max_v: 1.0,\n};\n\nlet command = ColorFilterCommand { range };\n```",
+      "description": "A command that filters an image based on a specific HSV color range.\n\nPixels falling outside the HSV range are masked\nout by setting to black.",
       "type": "object",
       "properties": {
         "range": {
@@ -592,6 +641,51 @@
         "equalizeHistogram"
       ]
     },
+    "ExcludeImageSettings": {
+      "description": "Leaves an image out of the results when its measurements say it's bad.\n\nEach rule compares a measurement of an earlier step (e.g. Image\nQuality's focus score) with a value. When the rules are met, the image\nis analysed to the end but disabled in the results, with the reason - to\ncheck it by hand and enable it again if it's fine. The rules are checked\non every plane; one plane meeting them excludes the whole image. A\nmeasurement without a value (e.g. the slope of a flat image) doesn't\nmeet a rule.",
+      "type": "object",
+      "properties": {
+        "excludeWhen": {
+          "description": "Excluded when one rule is met, or only when all of them are.",
+          "$ref": "#/$defs/MeasureExcludeImageExcludeWhenSettings"
+        },
+        "rules": {
+          "description": "The rules: a measurement below or above a value.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludeRuleSettings"
+          }
+        }
+      },
+      "required": [
+        "excludeWhen",
+        "rules"
+      ]
+    },
+    "ExcludeRuleSettings": {
+      "description": "One rule: a measurement compared with a value.",
+      "type": "object",
+      "properties": {
+        "comparison": {
+          "description": "Met when the measurement is below or above the value.",
+          "$ref": "#/$defs/MeasureExcludeImageRuleComparisonSettings"
+        },
+        "measurement": {
+          "description": "The measurement, made by an earlier step.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value, in the measurement's unit.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "measurement",
+        "comparison",
+        "value"
+      ]
+    },
     "ExtractClassMappingSettings": {
       "description": "The object class the objects of one segmentation class get.",
       "type": "object",
@@ -633,12 +727,152 @@
       }
     },
     "FillHolesSettings": {
-      "description": "Fills enclosed background holes in the segmentation map.\n\n[Preprocessing] -> [Segment/Threshold] -> [Fill Holes] -> [Connected Components] -> [Watershed] -> [Extract Objects]\n\nA direct port of ImageJ's `Process > Binary > Fill Holes` command\n(`ij.plugin.filter.Binary.fill`, originally contributed by Gabriel\nLandini): a background pixel counts as a \"hole\" - and is turned into\nforeground - exactly when it cannot be reached from the image border by a\npath of background pixels using 4-connectivity.\n\nWhich pixels count as a \"hole\" is decided the same way ImageJ does it:\nevery non-background pixel is \"foreground\" regardless of its actual\nlabel/class value, so a background pocket enclosed by *any* mix of labels\nis still a hole. Unlike ImageJ, each hole is then attributed back to the\nclass that actually encloses it - every enclosed background region is\ngrouped into a connected component, and that component is filled with\nwhichever label is most common among its immediately bordering pixels\n(falling back to `FILL_VALUE` only in the degenerate case of a hole with\nno foreground neighbor at all). This keeps multi-class segmentation maps\ncorrect: a hole inside a class-2 object is filled with 2, not merged with\na fixed value that happens to collide with an unrelated class elsewhere\nin the image.",
+      "description": "Fills enclosed background holes in the segmentation map.\n\n[Preprocessing] -> [Segment/Threshold] -> [Fill Holes] -> [Connected Components] -> [Watershed] -> [Extract Objects]\n\nSame behaviour as ImageJ's `Process > Binary > Fill Holes`: a\n4-connected flood fill of the background from the image border;\nevery background pixel it doesn't reach is a hole and is turned into\nforeground.\n\nWhich pixels count as a \"hole\" is decided the same way ImageJ does it:\nevery non-background pixel is \"foreground\" regardless of its actual\nlabel/class value, so a background pocket enclosed by *any* mix of labels\nis still a hole. Unlike ImageJ, each hole is then attributed back to the\nclass that actually encloses it - every enclosed background region is\ngrouped into a connected component, and that component is filled with\nwhichever label is most common among its immediately bordering pixels\n(falling back to `FILL_VALUE` only in the degenerate case of a hole with\nno foreground neighbor at all). This keeps multi-class segmentation maps\ncorrect: a hole inside a class-2 object is filled with 2, not merged with\na fixed value that happens to collide with an unrelated class elsewhere\nin the image.",
       "type": "object"
     },
     "FillObjectHolesSettings": {
       "description": "Fills the holes inside every object, one object at a time.\n\n[AI Cellpose / StarDist Segmentation | Watershed | Connected Components] -> [Fill Object Holes] -> [Extract Objects]\n\nWorks on the objects (instance map), so it has to come after a step that\ncreates objects and before Extract Objects. A pixel becomes part of an\nobject when it is enclosed by that object alone; a gap enclosed by several\ntouching objects together is left as it is. An object lying completely\ninside another object's hole becomes part of the enclosing object. Filled\npixels get the class of the object they now belong to.\n\nUse Fill Holes instead to fill holes in the segmentation map before the\nobjects are created (e.g. right after a Threshold).",
       "type": "object"
+    },
+    "FiltersColorDeconvolutionStainOutputSettings": {
+      "description": "Which stain the step keeps.",
+      "oneOf": [
+        {
+          "description": "Stain 1: Hematoxylin in every preset (nuclei).",
+          "type": "string",
+          "const": "STAIN1"
+        },
+        {
+          "description": "Stain 2: DAB in H-DAB, Eosin in H&E and H-E-DAB.",
+          "type": "string",
+          "const": "STAIN2"
+        },
+        {
+          "description": "Stain 3: DAB in H-E-DAB, else the residual - what neither stain\nexplains (high where the stain vectors don't fit the slide).",
+          "type": "string",
+          "const": "STAIN3"
+        }
+      ]
+    },
+    "FiltersColorDeconvolutionStainVectorsSettings": {
+      "description": "The stains' colors: Ruifrok & Johnston's measured stain vectors (OD of\nred, green, blue), or your own.",
+      "oneOf": [
+        {
+          "description": "Hematoxylin and DAB (immunohistochemistry).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "H_DAB"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Hematoxylin and Eosin.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "H_E"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Hematoxylin, Eosin and DAB.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "H_E_DAB"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Your own stain vectors, e.g. measured on a single-stained slide: the\noptical density of each stain in red, green and blue. Stain 3 all 0:\nthe residual (perpendicular to stains 1 and 2).",
+          "type": "object",
+          "properties": {
+            "stain1Blue": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain1Green": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain1Red": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain2Blue": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain2Green": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain2Red": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain3Blue": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain3Green": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "stain3Red": {
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "CUSTOM"
+            }
+          },
+          "required": [
+            "type",
+            "stain1Red",
+            "stain1Green",
+            "stain1Blue",
+            "stain2Red",
+            "stain2Green",
+            "stain2Blue",
+            "stain3Red",
+            "stain3Green",
+            "stain3Blue"
+          ]
+        }
+      ]
     },
     "FiltersHessianHessianModeSettings": {
       "description": "Specifies the feature extraction method for the Hessian matrix.\n\nThe Hessian matrix describes the local second-order structure of an image,\noften used for blob detection (LoG) or ridge extraction.",
@@ -861,7 +1095,7 @@
           "type": "integer",
           "format": "uint",
           "default": 3,
-          "maximum": 27,
+          "maximum": 49,
           "minimum": 3
         },
         "sigma": {
@@ -869,7 +1103,7 @@
           "type": "number",
           "format": "float",
           "default": 0.3400000035762787,
-          "maximum": 5,
+          "maximum": 8,
           "minimum": 0.1
         }
       }
@@ -942,7 +1176,7 @@
       }
     },
     "IlluminationCorrectionSettings": {
-      "description": "Use this when your images are brighter in the middle and dimmer toward\nthe edges/corners (vignetting), or show any other smooth shading pattern\nthat repeats the same way across every tile or every image from the same\nmicroscope/camera setup - a consequence of the optics or illumination,\nnot the sample. Left uncorrected, that shading makes intensity\ncomparisons between regions of an image (or between images/wells)\nunreliable, even though it rarely stops segmentation from finding\nobjects on its own.\n\nUse [`super::rolling_ball::RollingBall`] instead when the problem is a\n*local* background glow or halo under/around individual objects (e.g.\nout-of-focus light, autofluorescence, uneven staining) that differs from\nimage to image rather than being tied to the acquisition setup -\nRollingBall strips that local floor so thresholding/segmentation works\ncleanly. The two solve different problems: RollingBall won't fix a\nglobal brightness gradient, and this filter won't remove a local halo.\n\n### How it works\n\nFlat-field (\"illumination\") correction: estimates a smooth, slowly-varying\ngain/offset field caused by uneven illumination (vignetting, dust on the\ncondenser, uneven excitation) and removes it in a single calculate+apply\nstep - equivalent to CellProfiler's `CorrectIlluminationCalculate` and\n`CorrectIlluminationApply` modules combined into one.\n\nUnlike `RollingBall`, which estimates a *local* per-object background\nbaseline via a rolling structural element, this estimates one *global*,\nlow-frequency field for the whole image/channel.",
+      "description": "Use this when your images are brighter in the middle and dimmer toward\nthe edges/corners (vignetting), or show any other smooth shading pattern\nthat repeats the same way across every tile or every image from the same\nmicroscope/camera setup - a consequence of the optics or illumination,\nnot the sample. Left uncorrected, that shading makes intensity\ncomparisons between regions of an image (or between images/wells)\nunreliable, even though it rarely stops segmentation from finding\nobjects on its own.\n\nUse **Rolling Ball** instead when the problem is a\n*local* background glow or halo under/around individual objects (e.g.\nout-of-focus light, autofluorescence, uneven staining) that differs from\nimage to image rather than being tied to the acquisition setup -\nRollingBall strips that local floor so thresholding/segmentation works\ncleanly. The two solve different problems: RollingBall won't fix a\nglobal brightness gradient, and this filter won't remove a local halo.\n\n### How it works\n\nFlat-field (\"illumination\") correction: estimates a smooth, slowly-varying\ngain/offset field caused by uneven illumination (vignetting, dust on the\ncondenser, uneven excitation) and removes it in a single calculate+apply\nstep, so the field never has to be stored as an intermediate image\nand re-read.\n\nUnlike `RollingBall`, which estimates a *local* per-object background\nbaseline via a rolling structural element, this estimates one *global*,\nlow-frequency field for the whole image/channel.",
       "type": "object",
       "properties": {
         "applyMethod": {
@@ -1050,7 +1284,7 @@
           "$ref": "#/$defs/MathImageMathOperandSettings"
         },
         "secondImageAddress": {
-          "description": "The address of the second image in the [`ImageCache`] to use for the operation.",
+          "description": "The second image to use for the operation.",
           "$ref": "#/$defs/ImageAddress"
         },
         "swapOperands": {
@@ -1099,16 +1333,16 @@
       }
     },
     "IntensityTransformationSettings": {
-      "description": "Configuration for adjusting image contrast and brightness.\n\nThis transformation applies a linear mapping to pixel values.\nIn [`Mode::Manual`], the output is typically calculated as:\n`output = input * contrast + brightness`.",
+      "description": "Configuration for adjusting image contrast and brightness.\n\nThis transformation applies a linear mapping to pixel values.\nIn manual mode, the output is typically calculated as:\n`output = input * contrast + brightness`.",
       "type": "object",
       "properties": {
         "brightness": {
-          "description": "Brightness offset (bias).\n\nOnly active in [`Mode::Manual`].\nPositive values brighten the image, negative values darken it.",
+          "description": "Brightness offset (bias).\n\nOnly active in manual mode.\nPositive values brighten the image, negative values darken it.",
           "type": "number",
           "format": "float"
         },
         "contrast": {
-          "description": "Contrast multiplier (gain).\n\nOnly active in [`Mode::Manual`].\nValues > 1.0 increase contrast, while values < 1.0 decrease it.",
+          "description": "Contrast multiplier (gain).\n\nOnly active in manual mode.\nValues > 1.0 increase contrast, while values < 1.0 decrease it.",
           "type": "number",
           "format": "float"
         },
@@ -1159,6 +1393,11 @@
           "description": "Class added to every loaded object, so later steps can select them.\nSet to `Unset` to add none.",
           "$ref": "#/$defs/ObjectClass",
           "default": "UNSET"
+        },
+        "useOn": {
+          "description": "On which planes an annotation is used: where it was drawn, or on\nevery plane (and time point) - e.g. a region outlined once.",
+          "$ref": "#/$defs/ObjectLoadAnnotaedObjectsAnnotationUseSettings",
+          "default": "OWN_PLANE"
         }
       }
     },
@@ -1288,6 +1527,377 @@
         "IMAGE",
         "INSTANCE_MAP",
         "SEGMENTATION_MASK"
+      ]
+    },
+    "MeasureColocalizationCostesMethodSettings": {
+      "description": "How Costes' automatic thresholds are searched for - a trade-off between\nspeed and how exactly the threshold is found.",
+      "oneOf": [
+        {
+          "description": "No Costes values.",
+          "type": "string",
+          "const": "OFF"
+        },
+        {
+          "description": "A shrinking window of candidates - a few passes over the image, also\nfor 16-bit images.",
+          "type": "string",
+          "const": "FASTER"
+        },
+        {
+          "description": "Candidates from the top down, skipping while far off (slow on 16-bit\nimages).",
+          "type": "string",
+          "const": "FAST"
+        },
+        {
+          "description": "Every candidate from the top down (very slow on 16-bit images).",
+          "type": "string",
+          "const": "ACCURATE"
+        }
+      ]
+    },
+    "MeasureExcludeImageExcludeWhenSettings": {
+      "description": "How the rules combine.",
+      "oneOf": [
+        {
+          "description": "One rule met is enough.",
+          "type": "string",
+          "const": "ANY_RULE"
+        },
+        {
+          "description": "Every rule must be met.",
+          "type": "string",
+          "const": "ALL_RULES"
+        }
+      ]
+    },
+    "MeasureExcludeImageRuleComparisonSettings": {
+      "description": "Which side of the value meets a rule.",
+      "oneOf": [
+        {
+          "description": "Met below the value (e.g. a focus score too low).",
+          "type": "string",
+          "const": "BELOW"
+        },
+        {
+          "description": "Met above the value (e.g. too many saturated pixels).",
+          "type": "string",
+          "const": "ABOVE"
+        }
+      ]
+    },
+    "MeasureImageAreaOccupiedSettings": {
+      "description": "Measures how much of the image the objects of a class cover.\n\nThe area in pixels and µm² (with a known pixel size) and the part of the\nimage (0..1). Where objects overlap, the area counts once.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"area_occupied_01/...\").",
+          "type": "string"
+        },
+        "objectClass": {
+          "description": "The objects whose area is measured.",
+          "$ref": "#/$defs/ObjectClass"
+        }
+      },
+      "required": [
+        "id",
+        "objectClass"
+      ]
+    },
+    "MeasureImageColocalizationSettings": {
+      "description": "Measures how two channels go together over the whole image -\ncolocalization of the whole image as one region.\n\nPearson (-1 to 1) uses every pixel. Manders M1 is the part of channel\nA's intensity where channel B is bright too (M2 the other way round),\n\"bright\" meaning above the threshold - a percentage of the channel's\nmaximum, or Costes' automatic threshold. The overlap coefficient, K1/K2\nand RWC (Manders weighted by how similar the two pixels' ranks are) use\nthe same pixels.",
+      "type": "object",
+      "properties": {
+        "channelA": {
+          "description": "The first channel (A).",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 0
+        },
+        "channelB": {
+          "description": "The second channel (B).",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 1
+        },
+        "costes": {
+          "description": "Manders with Costes' automatic thresholds, and how they are found.",
+          "$ref": "#/$defs/MeasureColocalizationCostesMethodSettings",
+          "default": "FASTER"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"coloc_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "thresholdPercent": {
+          "description": "A pixel counts for Manders, the overlap and RWC when it is brighter\nthan this percentage of its channel's maximum (in the image).",
+          "type": "number",
+          "format": "float",
+          "default": 15.0,
+          "maximum": 100,
+          "minimum": 0
+        }
+      }
+    },
+    "MeasureImageIntensitySettings": {
+      "description": "Measures the brightness of a channel across the whole image.\n\nTotal, mean, standard deviation, minimum, maximum, median, lower and\nupper quartile and median absolute deviation - in gray values, like the\nobjects' intensities. It uses every pixel of the image, the background\ntoo.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel to measure.",
+          "$ref": "#/$defs/ImageChannelIdx"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"intensity_01/...\").",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "channel"
+      ]
+    },
+    "MeasureImageQualitySettings": {
+      "description": "Measures how usable a channel of the image is: sharp, not noisy, not\noverexposed.\n\nFocus score (the variance over the mean - low: blurry), power log-log\nslope (how fast fine detail fades - more negative: blurrier), the\npercent of pixels at the image's maximum and minimum (high: saturated or\nclipped) - all by their standard definitions - and the noise (σ in gray\nvalues, Immerkær's estimate). Use them with \"Exclude Image\" to leave bad\nimages out of the results.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel to measure.",
+          "$ref": "#/$defs/ImageChannelIdx"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"quality_01/...\").",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "channel"
+      ]
+    },
+    "MeasureImageTextureSettings": {
+      "description": "Measures the texture of a channel over the whole image - Haralick's\nfeatures of the gray-level co-occurrence matrix, per image.\n\nThe pixel pairs the scale apart in a direction say how the gray levels\ngo together: e.g. contrast is high where neighbours differ a lot, the\nangular second moment where few pairs repeat over and over (smooth or\nregular), entropy where the pairs are all different.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel measured.",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 0
+        },
+        "directions": {
+          "description": "One value per feature (the mean of the directions) or one per\ndirection.",
+          "$ref": "#/$defs/MeasureTextureTextureDirectionsSettings",
+          "default": "MEAN"
+        },
+        "grayLevels": {
+          "description": "The gray levels the 8-bit values are rescaled to (2 to 256): fewer\nare faster and less noisy, more see finer differences.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 256,
+          "maximum": 256,
+          "minimum": 2
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"texture_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "scale": {
+          "description": "How far apart the two pixels of a pair are, in pixels - about the\nsize of the texture's grain.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 3,
+          "maximum": 1000,
+          "minimum": 1
+        }
+      }
+    },
+    "MeasureObjectColocalizationSettings": {
+      "description": "Measures how two channels go together in each object of a class -\ncolocalization of every object as its own region.\n\nThe values of Measure Image Colocalization (but the slope) of the\nobject's pixels: the threshold is a percentage of the object's maximum,\nRWC ranks the values of all the objects, and Costes uses the whole\nimage's Costes thresholds.",
+      "type": "object",
+      "properties": {
+        "channelA": {
+          "description": "The first channel (A).",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 0
+        },
+        "channelB": {
+          "description": "The second channel (B).",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 1
+        },
+        "costes": {
+          "description": "Manders with Costes' automatic thresholds (the whole image's), and\nhow they are found.",
+          "$ref": "#/$defs/MeasureColocalizationCostesMethodSettings",
+          "default": "FASTER"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"object_coloc_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "objects": {
+          "description": "The objects measured.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "thresholdPercent": {
+          "description": "A pixel counts for Manders, the overlap and RWC when it is brighter\nthan this percentage of its channel's maximum (in the object).",
+          "type": "number",
+          "format": "float",
+          "default": 15.0,
+          "maximum": 100,
+          "minimum": 0
+        }
+      }
+    },
+    "MeasureObjectDistanceToParentSettings": {
+      "description": "Each child's distance to its parent of a class (linked by Relate\nObjects): centre to centre, and from its centre to the parent's edge.\nA child without a parent of the class has no value.",
+      "type": "object",
+      "properties": {
+        "children": {
+          "description": "The children measured (e.g. spots).",
+          "$ref": "#/$defs/ObjectClass"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"parent_distance_01/...\").",
+          "type": "string"
+        },
+        "parentClass": {
+          "description": "The class of their parent (as linked by Relate Objects, e.g. Cell).",
+          "$ref": "#/$defs/ObjectClass"
+        }
+      },
+      "required": [
+        "id",
+        "children",
+        "parentClass"
+      ]
+    },
+    "MeasureObjectNeighborsNeighborMethodSettings": {
+      "description": "Which objects count as neighbours (how the neighbourhood of an object\nis determined).",
+      "oneOf": [
+        {
+          "description": "Every object first grows over the background until it meets the\nothers; then the ones it touches.",
+          "type": "string",
+          "const": "EXPAND_UNTIL_ADJACENT"
+        },
+        {
+          "description": "The objects it touches (1 px apart at most).",
+          "type": "string",
+          "const": "ADJACENT"
+        },
+        {
+          "description": "The objects within the distance.",
+          "type": "string",
+          "const": "WITHIN_DISTANCE"
+        }
+      ]
+    },
+    "MeasureObjectNeighborsSettings": {
+      "description": "For each object: its neighbours, how much of its outline touches them,\nand its first and second closest object.\n\nThe closest objects are by the distance between the centres; each\ndistance names the object it is to. \"Percent touching\" is the part of\nthe object's outline pixels within the distance (+ ½ px) of a neighbour.",
+      "type": "object",
+      "properties": {
+        "distance": {
+          "description": "With \"Within a distance\": how far, in pixels.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 5,
+          "maximum": 1000,
+          "minimum": 1
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"neighbors_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "method": {
+          "description": "Which objects count as neighbours.",
+          "$ref": "#/$defs/MeasureObjectNeighborsNeighborMethodSettings",
+          "default": "EXPAND_UNTIL_ADJACENT"
+        },
+        "neighbors": {
+          "description": "The objects that count as neighbours (unset: the measured objects\nthemselves).",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "objects": {
+          "description": "The objects measured.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        }
+      }
+    },
+    "MeasureObjectShapeSettings": {
+      "description": "For each object: its convex area and solidity (the convex area counts\nthe pixels whose centre lies in the convex hull, so a convex object has\na solidity of exactly 1; solidity = area / convex area),\nits Euler number (1 - holes, 8-connected) and its radii (the distance of\nits pixels to the nearest pixel outside it: maximum, mean, median).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"shape_01/...\").",
+          "type": "string"
+        },
+        "objects": {
+          "description": "The objects measured.",
+          "$ref": "#/$defs/ObjectClass"
+        }
+      },
+      "required": [
+        "id",
+        "objects"
+      ]
+    },
+    "MeasureObjectTextureSettings": {
+      "description": "Measures the texture of a channel in each object of a class - Haralick's\nfeatures of the gray-level co-occurrence matrix, per object.\n\nThe same values as Measure Image Texture, of the object's pixels only.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel measured.",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 0
+        },
+        "directions": {
+          "description": "One value per feature (the mean of the directions) or one per\ndirection.",
+          "$ref": "#/$defs/MeasureTextureTextureDirectionsSettings",
+          "default": "MEAN"
+        },
+        "grayLevels": {
+          "description": "The gray levels the 8-bit values are rescaled to (2 to 256): fewer\nare faster and less noisy, more see finer differences.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 256,
+          "maximum": 256,
+          "minimum": 2
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"object_texture_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "objects": {
+          "description": "The objects measured.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "scale": {
+          "description": "How far apart the two pixels of a pair are, in pixels - about the\nsize of the texture's grain.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 3,
+          "maximum": 1000,
+          "minimum": 1
+        }
+      }
+    },
+    "MeasureTextureTextureDirectionsSettings": {
+      "description": "Which values per feature: the mean of the four directions, or one per\ndirection.",
+      "oneOf": [
+        {
+          "description": "The mean of the four directions - one value per feature.",
+          "type": "string",
+          "const": "MEAN"
+        },
+        {
+          "description": "A value per direction (0°, 45°, 90°, 135°) - four times as many\nvalues.",
+          "type": "string",
+          "const": "EACH"
+        }
       ]
     },
     "MedianSubtractSettings": {
@@ -1739,20 +2349,20 @@
       ]
     },
     "ObjectColocObjectsColocMultiplicitySettings": {
-      "description": "How many partners an object may coloc with at once.",
+      "description": "Which overlapping objects count as partners.",
       "oneOf": [
         {
-          "description": "Every object keeps only its single best-overlap match per other class -\ne.g. a small object sitting on the border of two larger ones picks\nexactly one (the larger overlap; ties go to the lower `ObjectId`).",
-          "type": "string",
-          "const": "ONE_TO_ONE"
-        },
-        {
-          "description": "Every object may coloc with every overlapping partner meeting `min_coloc_area`.",
+          "description": "Every overlapping object meeting the minimum overlap is a partner -\na spot touching two others has two.",
           "type": "string",
           "const": "MANY_TO_MANY"
         },
         {
-          "description": "Only objects of these classes may coloc with more than one partner;\nevery other class in `classes_to_coloc` is capped to its single\nbest-overlap match. E.g. with `classes_to_coloc: [Cell, Spot]` and\n`MultiFor([Cell])`, a cell can coloc with any number of spots, but\neach spot colocs with exactly one cell (the one it overlaps most).",
+          "description": "Only the partner with the largest overlap, per class - e.g. a small\nobject on the border of two larger ones picks the larger overlap;\nties go to the one further up (then further left).",
+          "type": "string",
+          "const": "ONE_TO_ONE"
+        },
+        {
+          "description": "Only objects of these classes may have more than one partner; every\nother class in `classes_to_coloc` is capped to its best-overlapping\none. E.g. with `classes_to_coloc: [Cell, Spot]` and `MultiFor([Cell])`,\na cell can have any number of spots, but each spot one cell (the one\nit overlaps most). Kept for older pipelines - Relate Objects links\nspots to cells.",
           "type": "object",
           "properties": {
             "MULTI_FOR": {
@@ -1766,6 +2376,26 @@
           "required": [
             "MULTI_FOR"
           ]
+        }
+      ]
+    },
+    "ObjectLoadAnnotaedObjectsAnnotationUseSettings": {
+      "description": "On which planes an annotation is used.",
+      "oneOf": [
+        {
+          "description": "Where it was drawn: an annotation of a plane on that plane, one\ndrawn on a z-projection in analyses on a z-projection. An analysis on\na z-projection uses every annotation of the time point.",
+          "type": "string",
+          "const": "OWN_PLANE"
+        },
+        {
+          "description": "On every plane of its time point, wherever it was drawn - e.g. a\nregion outlined once in a Max view, analysed plane by plane.",
+          "type": "string",
+          "const": "EVERY_PLANE"
+        },
+        {
+          "description": "On every plane and time point - e.g. a fixed region in a time\nseries.",
+          "type": "string",
+          "const": "EVERY_PLANE_AND_TIME_POINT"
         }
       ]
     },
@@ -1783,8 +2413,8 @@
           "type": "boolean",
           "default": true
         },
-        "minOverlapArea": {
-          "description": "Minimum overlap area before an `other_class` object is treated as a partner\nof an input object; objects overlapping less than this are ignored.",
+        "minOverlapSize": {
+          "description": "Minimum overlap before an `other_class` object is treated as a partner\nof an input object; objects overlapping less than this are ignored.\nAn area in 2D, a volume in 3D.",
           "type": "number",
           "format": "float",
           "default": 2.0
@@ -1813,7 +2443,7 @@
           "default": "UNSET"
         },
         "sizeUnit": {
-          "description": "Size unit for `min_overlap_area`",
+          "description": "Size unit for `min_overlap_size`",
           "$ref": "#/$defs/SizeUnits",
           "default": "PIXELS"
         }
@@ -1841,6 +2471,21 @@
           "description": "Set difference: pixels in A that are NOT in B (A \\ B). The classic use case\nis deriving a cytoplasm-only region from a whole-cell mask and its nucleus.",
           "type": "string",
           "const": "SUBTRACT"
+        }
+      ]
+    },
+    "ObjectRelateObjectsRelateRuleSettings": {
+      "description": "How a child is matched to a parent.",
+      "oneOf": [
+        {
+          "description": "The child belongs to the parent its centre of mass lies in - robust\nfor small children such as spots in a cell.",
+          "type": "string",
+          "const": "CENTRE_INSIDE"
+        },
+        {
+          "description": "The child belongs to the parent it shares the most pixels with -\nfor children whose centre can lie outside themselves (crescents, the\noverlap regions of ColocalizeObjects).",
+          "type": "string",
+          "const": "LARGEST_OVERLAP"
         }
       ]
     },
@@ -1994,6 +2639,32 @@
           ]
         },
         {
+          "description": "Grows the objects outward by `margin` without growing into each other: every\nbackground pixel within `margin` of an object goes to the nearest object, so\nneighbouring objects split the space between them instead of overlapping.\nWith a large margin the objects grow until they touch.",
+          "type": "object",
+          "properties": {
+            "margin": {
+              "description": "How far the objects grow at most",
+              "type": "number",
+              "format": "float",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "EXPAND_WITHOUT_OVERLAP"
+            },
+            "unit": {
+              "description": "Unit `margin` is expressed in",
+              "$ref": "#/$defs/SizeUnits"
+            }
+          },
+          "required": [
+            "type",
+            "margin",
+            "unit"
+          ]
+        },
+        {
           "description": "Shrinks the object inward by `margin`, following its actual contour (standard flat\nerosion with a disk structuring element).",
           "type": "object",
           "properties": {
@@ -2125,10 +2796,23 @@
           "properties": {
             "type": {
               "type": "string",
-              "const": "COLOCALIZATION"
+              "const": "COLOCALIZE_OBJECTS"
             }
           },
-          "$ref": "#/$defs/ColocalizationSettings",
+          "$ref": "#/$defs/ColocalizeObjectsSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "COLOR_DECONVOLUTION"
+            }
+          },
+          "$ref": "#/$defs/ColorDeconvolutionSettings",
           "required": [
             "type"
           ]
@@ -2207,6 +2891,19 @@
             }
           },
           "$ref": "#/$defs/EnhanceContrastSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "EXCLUDE_IMAGE"
+            }
+          },
+          "$ref": "#/$defs/ExcludeImageSettings",
           "required": [
             "type"
           ]
@@ -2372,6 +3069,136 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "MEASURE_IMAGE_AREA_OCCUPIED"
+            }
+          },
+          "$ref": "#/$defs/MeasureImageAreaOccupiedSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_IMAGE_COLOCALIZATION"
+            }
+          },
+          "$ref": "#/$defs/MeasureImageColocalizationSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_IMAGE_INTENSITY"
+            }
+          },
+          "$ref": "#/$defs/MeasureImageIntensitySettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_IMAGE_QUALITY"
+            }
+          },
+          "$ref": "#/$defs/MeasureImageQualitySettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_IMAGE_TEXTURE"
+            }
+          },
+          "$ref": "#/$defs/MeasureImageTextureSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_COLOCALIZATION"
+            }
+          },
+          "$ref": "#/$defs/MeasureObjectColocalizationSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_DISTANCE_TO_PARENT"
+            }
+          },
+          "$ref": "#/$defs/MeasureObjectDistanceToParentSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_NEIGHBORS"
+            }
+          },
+          "$ref": "#/$defs/MeasureObjectNeighborsSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_SHAPE"
+            }
+          },
+          "$ref": "#/$defs/MeasureObjectShapeSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_TEXTURE"
+            }
+          },
+          "$ref": "#/$defs/MeasureObjectTextureSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "MEDIAN_SUBTRACT"
             }
           },
@@ -2424,10 +3251,36 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "PROPAGATION"
+            }
+          },
+          "$ref": "#/$defs/PropagationSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "RANK_FILTER"
             }
           },
           "$ref": "#/$defs/RankFilterSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "RELATE_OBJECTS"
+            }
+          },
+          "$ref": "#/$defs/RelateObjectsSettings",
           "required": [
             "type"
           ]
@@ -2648,22 +3501,28 @@
       "description": "Segments the image with a pixel classifier trained in the AI training dialog.\n\n[Preprocessing] -> [Pixel classifier] -> [Fill Holes] -> [Connected Components] -> [Watershed] -> [Extract Objects]\n\nTrain a classifier in EVAnalyzer's AI training dialog from your annotated objects; the training saves it as an `.evamodel` file, which this step applies.\nThe classifier assigns every pixel of the image to a class, producing a segmented image.\nThe segmentation mapping translates the model's classes into this project's segmentation classes.\n\nUse a pixel classifier in place of a threshold step.\nLike a threshold, it is usually followed by a Connected Components step and then an Extract Objects step.",
       "type": "object",
       "properties": {
+        "minCertainty": {
+          "description": "Pixels the model is less sure about than this become background (0 = off).\nThe certainty is the share of trees (random forest) or neighbours (KNN) voting for the class, or the probability of the class (MLP).",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0
+        },
         "modelPath": {
           "description": "Path to a trained pixel classifier model, saved from the AI training dialog.",
-          "type": "string"
+          "type": "string",
+          "default": ""
         },
         "segmentationMapping": {
           "description": "Maps the model's predicted classes to this project's segmentation classes.",
           "type": "array",
+          "default": [],
           "items": {
             "$ref": "#/$defs/SegmentationMappingSettings"
           }
         }
-      },
-      "required": [
-        "modelPath",
-        "segmentationMapping"
-      ]
+      }
     },
     "PixelUnits": {
       "type": "string",
@@ -2672,6 +3531,44 @@
         "PERCENT",
         "RELATIVE"
       ]
+    },
+    "PropagationSettings": {
+      "description": "Grows a region around each seed object through a channel.\n\nE.g. a cell around its nucleus through the cell stain: every pixel goes\nto the seed it is reached from at the lowest cost, a step costing more\nthe more the stain's brightness changes - so neighbouring cells meet\nwhere the stain is dim, not halfway between their nuclei. Each region\nkeeps its seed's pixels (Relate Objects links it to its seed).",
+      "type": "object",
+      "properties": {
+        "excludeAtEdges": {
+          "description": "Discard regions that touch the image border.",
+          "type": "boolean",
+          "default": false
+        },
+        "growthChannel": {
+          "description": "The channel the regions grow through (e.g. the cell or membrane\nstain).",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 0
+        },
+        "mask": {
+          "description": "Regions only cover pixels of objects carrying this class (e.g. the\nthresholded cell stain). `Unset`: the whole image.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "outputClass": {
+          "description": "The class the grown regions get.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "regularization": {
+          "description": "How much plain distance counts against the change in brightness\n(λ): larger values split more by distance, `0` by brightness only.",
+          "type": "number",
+          "format": "float",
+          "default": 0.05000000074505806,
+          "minimum": 0
+        },
+        "seeds": {
+          "description": "Objects carrying this class are the seeds (e.g. nuclei): each grows\ninto one region.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        }
+      }
     },
     "RankFilterSettings": {
       "description": "A filter that transforms pixels based on the statistical rank of their neighbors.\n\nRank filters are non-linear operators used for noise reduction,\nmorphological operations, and feature enhancement.\n\nThis algorithm sorts (ranks) all pixel values within a local neighborhood\nwindow and assigns a specific percentile value to the center pixel. By selecting\ndifferent ranks, it acts as a configurable operator: the minimum rank performs\nerosion, the maximum rank performs dilation, and the median rank (50th percentile)\nprovides highly effective impulse noise suppression while preserving sharp structural edges.",
@@ -2691,6 +3588,38 @@
         "radius",
         "filterType"
       ]
+    },
+    "RelateObjectsSettings": {
+      "description": "Links objects to the objects they belong to: each child (e.g. a spot)\ngets at most one parent of each parent class (e.g. its cell).\n\nThe results then give per parent the number of its children and the\nmean, median, ... of their measurements, and the parent's values next to\neach child. A child already linked to a parent of one of these classes\nis linked anew - or unlinked when no parent matches.",
+      "type": "object",
+      "properties": {
+        "childClasses": {
+          "description": "The objects to link to a parent (e.g. spots).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ObjectClass"
+          }
+        },
+        "parentClasses": {
+          "description": "The classes of the objects they belong to (e.g. Cell); a child gets\nat most one parent of each.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ObjectClass"
+          }
+        },
+        "removeWithoutParent": {
+          "description": "Remove the children that don't get a parent of every parent class\n(e.g. keep only the spots inside cells).",
+          "type": "boolean",
+          "default": false
+        },
+        "rule": {
+          "description": "How a child is matched to a parent.",
+          "$ref": "#/$defs/ObjectRelateObjectsRelateRuleSettings",
+          "default": "CENTRE_INSIDE"
+        }
+      }
     },
     "RollingBallSettings": {
       "description": "Removes non-uniform background illumination by calculating a local intensity baseline.\n\nThis algorithm models the image as a 3D intensity landscape and conceptually rolls\na sphere of a user-defined radius underneath it. The ball cannot penetrate narrow\nintensity peaks (true signal objects) but follows the sweeping, lower-frequency\ncurves of background variations. The path traced by the ball establishes a local\nbaseline map that is subtracted from the original image to isolate foreground features.",
@@ -3005,7 +3934,7 @@
           ]
         },
         {
-          "description": "Minimizes intra-class variance (maximizes inter-class variance).\n\n`Two` behaves exactly as before - one cut, `thresh_otsu`. `Three` jointly\nfinds two simultaneous cuts (Otsu's variance criterion is additive across\nclasses, so this is the same search one level deeper - see `thresh_otsu_multi`)\nand returns whichever cut `middle_class` selects. Mirrors CellProfiler's\n\"Two-class or three-class thresholding?\" + \"Assign pixels in the middle\nintensity class to the foreground or the background?\" pair.",
+          "description": "Minimizes intra-class variance (maximizes inter-class variance).\n\n`Two` behaves exactly as before - one cut, `thresh_otsu`. `Three` jointly\nfinds two simultaneous cuts (Otsu's variance criterion is additive across\nclasses, so this is the same search one level deeper - see `thresh_otsu_multi`)\nand returns whichever cut `middle_class` selects: the lower cut puts\nthe middle intensity class into the foreground, the upper cut into the\nbackground - useful when dim structures sit between object and\nbackground.",
           "type": "object",
           "properties": {
             "classes": {
@@ -3074,7 +4003,7 @@
           ]
         },
         {
-          "description": "Trims outliers from both ends of the sorted pixel distribution, then\nsets the threshold at `deviations_above_average` standard deviations\n(or MADs) above the trimmed mean (or median). A port of CellProfiler's\n\"Robust Background\" method - well suited to images with a clean, low\nbackground and sparse foreground, since the outlier trim keeps bright\nforeground pixels from dragging the background estimate upward.",
+          "description": "Trims outliers from both ends of the sorted pixel distribution, then\nsets the threshold at `deviations_above_average` standard deviations\n(or MADs) above the trimmed mean (or median). Well suited to images\nwith a clean, low\nbackground and sparse foreground, since the outlier trim keeps bright\nforeground pixels from dragging the background estimate upward.",
           "type": "object",
           "properties": {
             "averagingMethod": {
@@ -3108,7 +4037,7 @@
       ]
     },
     "SegmentationThresholdThresholdValueSourceSettings": {
-      "description": "Which image the threshold *value* is calculated from. Mirrors CellProfiler's\nability to calculate a threshold on one image (e.g. the raw, unblurred\nimage) and apply it to another (the blurred image actually being\nsegmented): the cut-off computed here is always applied against the\npipeline's actual current image - see [`ThresholdEntry::value_source`].",
+      "description": "Which image the threshold *value* is calculated from. Allows calculating a\nthreshold on one image (e.g. the raw, unblurred image, whose histogram is\nnot flattened by the blur) and applying it to another (the blurred image\nactually being segmented): the cut-off computed here is always applied\nagainst the\npipeline's actual current image - see [`ThresholdEntry::value_source`].",
       "oneOf": [
         {
           "description": "Calculate the threshold from the pipeline's current image - the same\nimage the threshold is applied to. This is the historical behavior.",
@@ -3289,7 +4218,7 @@
       }
     },
     "ThresholdSettings": {
-      "description": "A filter that segments an image into discrete classes based on intensity.\n\nThis supports \"Multi-Otsu\" style behavior by allowing a vector of\n[`ThresholdSettings`]. Each pixel is evaluated against the settings to\ndetermine which `segmentation_class` it belongs to.",
+      "description": "A filter that segments an image into discrete classes based on intensity.\n\nThis supports \"Multi-Otsu\" style behavior by allowing several\nthresholds. Each pixel is evaluated against them to determine which\nsegmentation class it belongs to.",
       "type": "object",
       "properties": {
         "thresholds": {
@@ -3329,7 +4258,7 @@
       }
     },
     "UNetSettings": {
-      "description": "Semantic segmentation using a pretrained U-Net exported as TorchScript.\n\nThe model is expected to accept a `[1, 1, H, W]` float tensor (single-channel,\nsame normalization as the rest of the pipeline) and return either a\n`[1, 1, H, W]` tensor of per-pixel foreground probabilities (the model already\napplies its final sigmoid) or a `[1, C, H, W]` tensor with more than one\nchannel, in which case `output_mode` and `foreground_channel` decide how the\nforeground probability is extracted (see [`UNetOutputMode`]). Runs on GPU\nautomatically if CUDA is available in the linked libtorch build, otherwise\nfalls back to CPU.\n\nAny tile size works: the tile is mirror-padded to a multiple of 16 (U-Nets\nhalve the image 4 times and fail otherwise) plus a 16 px border (context\nfor the pixels at the tile edge, the \"halo\" bioimage.io models declare),\nand the prediction is cropped back to the tile.",
+      "description": "Semantic segmentation using a pretrained U-Net exported as TorchScript.\n\nThe model is expected to accept a `[1, 1, H, W]` float tensor (single-channel,\nsame normalization as the rest of the pipeline) and return either a\n`[1, 1, H, W]` tensor of per-pixel foreground probabilities (the model already\napplies its final sigmoid) or a `[1, C, H, W]` tensor with more than one\nchannel, in which case `output_mode` and `foreground_channel` decide how the\nforeground probability is extracted. Runs on GPU\nautomatically if CUDA is available in the linked libtorch build, otherwise\nfalls back to CPU.\n\nAny tile size works: the tile is mirror-padded to a multiple of 16 (U-Nets\nhalve the image 4 times and fail otherwise) plus a 16 px border (context\nfor the pixels at the tile edge, the \"halo\" bioimage.io models declare),\nand the prediction is cropped back to the tile.",
       "type": "object",
       "properties": {
         "boundaryChannel": {
@@ -3446,7 +4375,7 @@
       "type": "object",
       "properties": {
         "maximumFinderTolerance": {
-          "description": "Prominence tolerance for the maximum finder, in pixels of distance -\n**or**, when `seed_source == Intensity`, CellProfiler's \"typical\nobject diameter\"-derived maxima-suppression radius, in pixels (its\ndisk-shaped local-maximum search footprint is `max(1, this - 0.5)`).\nSame field, two meanings depending on which surface seeds come from -\nboth are fundamentally a spatial scale over the *seed-finding*\nsurface, only the surface itself changes.\n\nFor `DistanceMap`: a local maximum of the distance map is treated as\na separate object only if it protrudes more than this value above\nthe ridge connecting it to a higher maximum. This is ImageJ's\n\"prominence\"/\"noise tolerance\" parameter.\n\n* **Low values**: more sensitive; may over-segment ragged objects.\n* **High values**: more robust; may fail to split genuinely touching objects.\n\nImageJ's default of `0.5` works well for most distance maps; raise it if a\nsingle object is being split into several pieces.",
+          "description": "Prominence tolerance for the maximum finder, in pixels of distance -\n**or**, when `seed_source == Intensity`, the maxima-suppression\nradius in pixels, derived from the typical object diameter (the\ndisk-shaped local-maximum search footprint is `max(1, this - 0.5)`).\nSame field, two meanings depending on which surface seeds come from -\nboth are fundamentally a spatial scale over the *seed-finding*\nsurface, only the surface itself changes.\n\nFor `DistanceMap`: a local maximum of the distance map is treated as\na separate object only if it protrudes more than this value above\nthe ridge connecting it to a higher maximum. This is ImageJ's\n\"prominence\"/\"noise tolerance\" parameter.\n\n* **Low values**: more sensitive; may over-segment ragged objects.\n* **High values**: more robust; may fail to split genuinely touching objects.\n\nImageJ's default of `0.5` works well for most distance maps; raise it if a\nsingle object is being split into several pieces.",
           "type": "number",
           "format": "float",
           "default": 0.5,
@@ -3462,12 +4391,12 @@
           "minimum": 0
         },
         "seedSource": {
-          "description": "What surface local maxima are seeded from. The watershed *flood*\nitself is unaffected either way - it always runs on the distance\nmap, matching CellProfiler's \"Shape\" watershed method.\n\n`DistanceMap` (default) emulates ImageJ's watershed implementation:\nseeds and flood both come from the distance map. `Intensity` instead\nfinds seeds as local maxima of the (optionally smoothed) grayscale\nimage, restricted to each object's own footprint - a faithful port\nof CellProfiler `IdentifyPrimaryObjects`' \"Intensity\" unclumping\nmethod (see [`crate::algos::segmentation::maximum_finder::find_intensity_seeds`]),\nthe fix for diffusely-connected regions whose *shape* has no separate\npeaks but whose *brightness* clearly does.",
+          "description": "What surface local maxima are seeded from. The watershed *flood*\nitself is unaffected either way - it always runs on the distance\nmap (the \"Shape\" watershed: boundaries follow the objects' geometry\neven when the seeds come from brightness).\n\n`DistanceMap` (default) emulates ImageJ's watershed implementation:\nseeds and flood both come from the distance map. `Intensity` instead\nfinds seeds as local maxima of the (optionally smoothed) grayscale\nimage, restricted to each object's own footprint (\"Intensity\"\nunclumping) - the fix for diffusely-connected regions whose *shape*\nhas no separate peaks but whose *brightness* clearly does.",
           "$ref": "#/$defs/SegmentationWatershedSeedSourceSettings",
           "default": "DISTANCE_MAP"
         },
         "smoothingSigma": {
-          "description": "Standard deviation (px) of an optional Gaussian blur applied *before*\nseed-finding, to the surface `seed_source` seeds from - the distance\nmap for `DistanceMap`, or the grayscale intensity image for\n`Intensity` (matching CellProfiler's own smoothing step ahead of its\n\"Intensity\" unclumping). `0` disables it. The watershed *flood*\nalways runs on the (unsmoothed-by-this-field) distance map either way.\n\nImageJ's `trueEdmHeight` correction already handles ordinary ragged mask\nboundaries, so this is rarely needed for `DistanceMap`; for extremely\nnoisy AI masks a value of `1.0`–`2.0` can further suppress spurious maxima.",
+          "description": "Standard deviation (px) of an optional Gaussian blur applied *before*\nseed-finding, to the surface `seed_source` seeds from - the distance\nmap for `DistanceMap`, or the grayscale intensity image for\n`Intensity` (smoothing the intensity image keeps noise from creating\nspurious brightness peaks, each of which would become its own seed).\n`0` disables it. The watershed *flood*\nalways runs on the (unsmoothed-by-this-field) distance map either way.\n\nImageJ's `trueEdmHeight` correction already handles ordinary ragged mask\nboundaries, so this is rarely needed for `DistanceMap`; for extremely\nnoisy AI masks a value of `1.0`–`2.0` can further suppress spurious maxima.",
           "type": "number",
           "format": "float",
           "default": 0.0,

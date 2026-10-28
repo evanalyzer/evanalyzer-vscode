@@ -309,6 +309,13 @@
           "items": {
             "$ref": "#/$defs/ObjectMetric"
           }
+        },
+        "ring_width": {
+          "description": "Width in px of the ring around each object the ring features are\nmeasured in (every pixel at most this far from the object).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 5,
+          "minimum": 0
         }
       },
       "required": [
@@ -326,6 +333,23 @@
             "items": {
               "$ref": "#/$defs/PreprocessingSteps"
             }
+          }
+        },
+        "image_channel_names": {
+          "description": "The names `image_channels` had when the model was trained (same\norder) - for information; channels are found by their number.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "image_channels": {
+          "description": "The image channels every entry of `channels` is computed on, each\nin turn (features: image channel 0's entries, then image channel\n1's, ...). Empty: the image the pipeline step gets (e.g. after\npreprocessing steps) - one image, as before channels could be chosen.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -453,7 +477,7 @@
           "type": "integer",
           "format": "uint",
           "default": 3,
-          "maximum": 27,
+          "maximum": 49,
           "minimum": 3
         },
         "sigma": {
@@ -461,7 +485,7 @@
           "type": "number",
           "format": "float",
           "default": 0.3400000035762787,
-          "maximum": 5,
+          "maximum": 8,
           "minimum": 0.1
         }
       }
@@ -871,7 +895,7 @@
       ]
     },
     "ObjectMetric": {
-      "description": "One selectable object-classifier feature, mapped directly onto `Object`'s\nown measurement methods (`crates/core/src/object.rs`) — no filter chain\nconcept here, unlike pixel features, since these are already-computed\nscalar measurements, not something composed from image filters.\n\nDeliberately excludes `object_class` (the training label itself — including\nit would be data leakage) and centroid/position (teaches location instead\nof shape, a classic overfitting trap for this kind of tool).\n\nSERIALIZATION-CRITICAL: this type is stored inside every saved object\nclassifier model. Once any model has been saved, existing variants must\nnever be renamed, removed, or have their meaning changed - treat this the\nsame as a database migration, not a normal refactor. Adding a new variant\nis safe.",
+      "description": "One selectable object-classifier feature, mapped directly onto `Object`'s\nown measurement methods (`crates/core/src/object.rs`) — no filter chain\nconcept here, unlike pixel features, since these are plain\nscalar measurements, not something composed from image filters.\n\nDeliberately excludes `object_class` (the training label itself — including\nit would be data leakage) and centroid/position (teaches location instead\nof shape, a classic overfitting trap for this kind of tool).\n\nSERIALIZATION-CRITICAL: this type is stored inside every saved object\nclassifier model. Once any model has been saved, existing variants must\nnever be renamed, removed, or have their meaning changed - treat this the\nsame as a database migration, not a normal refactor. Adding a new variant\nis safe.",
       "oneOf": [
         {
           "type": "string",
@@ -944,6 +968,100 @@
           "required": [
             "INTENSITY_AVG"
           ]
+        },
+        {
+          "description": "How the pixel values spread in the channel (standard deviation).",
+          "type": "object",
+          "properties": {
+            "INTENSITY_STD": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "INTENSITY_STD"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "INTENSITY_MEDIAN": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "INTENSITY_MEDIAN"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "INTENSITY_LOWER_QUARTILE": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "INTENSITY_LOWER_QUARTILE"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "INTENSITY_UPPER_QUARTILE": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "INTENSITY_UPPER_QUARTILE"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "INTENSITY_MAD": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "INTENSITY_MAD"
+          ]
+        },
+        {
+          "description": "Mean intensity in the ring around the object (`ring_width` px wide,\nneighbours included) - how bright its surroundings are.",
+          "type": "object",
+          "properties": {
+            "RING_INTENSITY_AVG": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "RING_INTENSITY_AVG"
+          ]
+        },
+        {
+          "description": "The object's mean intensity minus its ring's: how much it stands out\nfrom its surroundings.",
+          "type": "object",
+          "properties": {
+            "RING_CONTRAST": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "RING_CONTRAST"
+          ]
         }
       ]
     },
@@ -972,7 +1090,7 @@
       ]
     },
     "PreprocessingSteps": {
-      "description": "A single preprocessing step within one feature channel's chain (an inner\nentry of `FeatureSpec::channels`). Each step reads the previous step's\noutput in the same context (scratch-pad/swap chaining, same as any\nmulti-step Command sequence), so e.g. Laplacian-of-Gaussian is simply\n`vec![GaussianBlur(...), Laplacian(...)]` — pre-smoothing any filter is just\nan earlier step, not a bespoke field.\n\nWraps the already-generated `...Settings` types instead of re-declaring\nparallel fields/enums: they're already Serialize/Deserialize/JsonSchema,\nalready narrow (pure algorithm parameters, no pipeline-orchestration\nbaggage), and their `From<Settings> for Command` conversions already exist\nin `algos_from_config.rs`, so this stays in sync automatically if a\nfilter's parameters ever change.\n\nIMPORTANT: `GaussianBlurSettings::sigma` is clamped to [0.1, 5.0] by its\n`From` conversion (matches the command's own `#[cmdsmeta]` bounds) — any\nstep using `GaussianBlur` inherits that ceiling. ilastik's standard scale\nrange goes up to sigma=10; decide deliberately if you need to go higher.\n\nSERIALIZATION-CRITICAL: this type is stored inside every saved pixel\nclassifier model. Once any model has been saved, existing variants must\nnever be renamed, removed, or have their meaning changed — treat this the\nsame as a database migration, not a normal refactor. Adding a new variant\nis safe; changing or deleting an existing one silently breaks every model\nalready saved with it.",
+      "description": "A single preprocessing step within one feature channel's chain (an inner\nentry of `FeatureSpec::channels`). Each step reads the previous step's\noutput in the same context (scratch-pad/swap chaining, same as any\nmulti-step Command sequence), so e.g. Laplacian-of-Gaussian is simply\n`vec![GaussianBlur(...), Laplacian(...)]` — pre-smoothing any filter is just\nan earlier step, not a bespoke field.\n\nWraps the already-generated `...Settings` types instead of re-declaring\nparallel fields/enums: they're already Serialize/Deserialize/JsonSchema,\nalready narrow (pure algorithm parameters, no pipeline-orchestration\nbaggage), and their `From<Settings> for Command` conversions already exist\nin `algos_from_config.rs`, so this stays in sync automatically if a\nfilter's parameters ever change.\n\nIMPORTANT: `GaussianBlurSettings::sigma` is clamped to [0.1, 8.0] by its\n`From` conversion (matches the command's own `#[cmdsmeta]` bounds; the\ntraining panel's largest size, 16 px, is sigma 8) — any step using\n`GaussianBlur` inherits that ceiling.\n\nSERIALIZATION-CRITICAL: this type is stored inside every saved pixel\nclassifier model. Once any model has been saved, existing variants must\nnever be renamed, removed, or have their meaning changed — treat this the\nsame as a database migration, not a normal refactor. Adding a new variant\nis safe; changing or deleting an existing one silently breaks every model\nalready saved with it.",
       "oneOf": [
         {
           "type": "object",
@@ -1062,7 +1180,7 @@
           "default": "GINI"
         },
         "keepSamples": {
-          "description": "Whether to keep samples used for tree generation. This is required for OOB prediction.",
+          "description": "Not used: the samples used for each tree (for out-of-bag estimates)\nare never kept - see `evanalyzer_core`'s `Forest`.",
           "type": "boolean",
           "default": false
         },

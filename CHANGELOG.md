@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking:** updated all bundled schemas to evanalyzer `1.0.0-alpha.1`,
+  which renames `maxArea`/`minArea` → `maxSize`/`minSize`,
+  `minIntersectionArea` → `minIntersectionSize` and `minColocArea` →
+  `minColocSize` (`ColocalizationSettings` → `ColocalizeObjectsSettings`,
+  now defaulting to `MANY_TO_MANY`); files using the old names are now
+  flagged.
+- The new schemas also bring new steps (colour deconvolution, exclude
+  image, relate objects, image/object measurements, …), project
+  `resultsStorage`/`resultsViews`, and a minimum certainty for
+  classifiers.
+- New extension icon, taken from the evanalyzer GUI.
+
 ## 0.4.0
 
 Follows evanalyzer's rename of components to modules (branch `ai-plugin`).
