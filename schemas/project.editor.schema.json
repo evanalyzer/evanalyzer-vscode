@@ -390,6 +390,45 @@
         }
       }
     },
+    "AiSegmentationPieceSizePieceSizeSettings": {
+      "description": "How large the pieces are that a large tile runs through a U-Net or\nStarDist network in (square; a tile up to a piece runs whole). Smaller\npieces take less RAM, larger ones are faster - a U-Net on a slide: 1024\n~2.6 GB at once, 2048 ~8.5 GB.",
+      "oneOf": [
+        {
+          "description": "As large as the computer's RAM allows (2048, 1024 or 512) for a\nmodel seeing a limited neighbourhood - its result is the same\nwhatever the size, up to float rounding; 1024 on every computer for\na model normalizing by the whole image (InstanceNorm), whose result\nthe size changes a little.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "AUTO"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The same pieces for every model on every computer.",
+          "type": "object",
+          "properties": {
+            "side": {
+              "description": "Pixels per side of a piece.",
+              "type": "integer",
+              "format": "int32",
+              "maximum": 4096,
+              "minimum": 256
+            },
+            "type": {
+              "type": "string",
+              "const": "FIXED"
+            }
+          },
+          "required": [
+            "type",
+            "side"
+          ]
+        }
+      ]
+    },
     "AiSegmentationUnetUNetOutputModeSettings": {
       "description": "How a multi-channel U-Net output should be turned into a single foreground\nprobability map. Ignored for single-channel outputs, which are always\ntreated as already-activated foreground probabilities.",
       "oneOf": [
@@ -714,7 +753,7 @@
             "RECLASSIFY_IF_MATCH",
             "RECLASSIFY_IF_NOT_MATCH"
           ],
-          "description": "What to do with object class labels after criteria evaluation\n\nControls whether the output class is added or existing classes are removed,\nand whether the action is triggered on a criteria **match** or a **non-match**:\n\n- **AddOutputClassIfMatch** - append the output class to objects that pass the criteria.\n- **AddOutputClassIfNotMatch** - append the output class to objects that fail the criteria.\n- **RemoveInputClassIfMatch / NotMatch** - strip all input classes from matching / non-matching objects.\n- **RemoveOutputClassIfMatch / NotMatch** - strip the output class from matching / non-matching objects.\n- **RemoveAllClassesIfMatch / NotMatch** - clear every class label from matching / non-matching objects.",
+          "description": "What to do with object class labels after criteria evaluation\n\nControls whether the output class is added or existing classes are removed,\nand whether the action is triggered on a criteria **match** or a **non-match**:\n\n- **AddOutputClassIfMatch** - append the output class to objects that pass the criteria.\n- **AddOutputClassIfNotMatch** - append the output class to objects that fail the criteria.\n- **RemoveInputClassIfMatch / NotMatch** - strip all input classes from matching / non-matching objects.\n- **RemoveOutputClassIfMatch / NotMatch** - strip the output class from matching / non-matching objects.\n- **RemoveAllClassesIfMatch / NotMatch** - clear every class label from matching / non-matching objects.\n\nWith no criterion set (every range at its default, edge touching\nallowed, no intensity filter, `overlapping_with` Unset) every object\nmatches - except for the three remove-on-match operations, where then\nnothing matches and nothing is removed.",
           "default": "REMOVE_ALL_CLASSES_IF_NOT_MATCH"
         },
         "maxAspectRatio": {
@@ -908,7 +947,7 @@
               ]
             }
           ],
-          "description": "Additional criterion: the object must intersect an object carrying this class\n\nIf unset (the default) this filter is not applied. When set, an object only\nsatisfies the overall criteria if it also overlaps at least one object carrying this\nclass by at least `min_intersection_size`. Combine with e.g.\n`RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\nor `AddOutputClassIfMatch` to tag objects that do.",
+          "description": "Additional criterion: the object must intersect an object carrying this class\n\nIf unset (the default) this filter is not applied - with a\nremove-on-match operation and no other criterion the step then\nremoves nothing: how a module switches an optional removal off\n(e.g. spots on tetraspecks, for images without them). When set, an object only\nsatisfies the overall criteria if it also overlaps at least one object carrying this\nclass by at least `min_intersection_size`. Combine with e.g.\n`RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\nor `AddOutputClassIfMatch` to tag objects that do.\nUnset with no other criterion set: the remove-on-match operations remove nothing.",
           "default": "UNSET"
         },
         "sizeUnit": {
@@ -1982,6 +2021,81 @@
         }
       ]
     },
+    "FiltersVesselnessLinePolaritySettings": {
+      "description": "Whether [`Vesselness`] looks for bright or dark lines.",
+      "type": "string",
+      "enum": [
+        "BRIGHT",
+        "DARK"
+      ]
+    },
+    "FindMaximaSettings": {
+      "description": "Finds spots as local maxima: each pixel that is the brightest within the\nradius becomes one 1-pixel object.\n\n[Preprocessing (Gaussian Blur)] -> [Find Maxima] -> [Extract Objects] -> [Transform Objects (Draw Circle)]\n\nWrites the segmentation and the instance map (both replaced): the maxima\nget the segmentation class and one instance each; the image stays as it\nis. A plateau (equal neighbouring pixels) gives one maximum, its pixel\nnearest the plateau's centre; of equal maxima within the radius the one\nfound first (row order) is kept. Flat regions (a background of 0) are\nnever maxima.",
+      "type": "object",
+      "properties": {
+        "cutoff": {
+          "description": "How the quality cut-off is chosen. A maximum's quality is the image's\nvalue at it.\n\nManual: maxima above `min_quality` are kept.\nOtsu: Otsu's method on the qualities of all maxima of the image\nsplits spots from noise peaks; `min_quality` stays the lowest cut-off,\nso an image without spots doesn't turn its noise into spots.",
+          "type": "string",
+          "enum": [
+            "MANUAL",
+            "OTSU"
+          ],
+          "default": "MANUAL"
+        },
+        "excludeAtEdges": {
+          "description": "Drop maxima closer to the image border than the radius.",
+          "type": "boolean",
+          "default": false
+        },
+        "insideSegmentation": {
+          "description": "Only maxima on pixels of the current segmentation (any class, e.g.\nfrom a Threshold before) count. Brighter pixels outside it still\nsuppress maxima within the radius.",
+          "type": "boolean",
+          "default": false
+        },
+        "minQuality": {
+          "description": "Maxima with a quality at or below this value are dropped (with Otsu:\nthe lowest cut-off).",
+          "type": "number",
+          "format": "float",
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "qualityUnit": {
+          "type": "string",
+          "enum": [
+            "BIT",
+            "PERCENT",
+            "RELATIVE"
+          ],
+          "description": "Unit used for `min_quality`.\n\nbit: 0 - 255/65535\n%: 0 - 100.0\nrel: 0 - 1.0",
+          "default": "BIT"
+        },
+        "radius": {
+          "description": "A pixel is a maximum only if no pixel within this radius is brighter.\nAbout half the spot diameter: smaller finds several maxima per spot,\nlarger merges neighbouring spots into one.",
+          "type": "number",
+          "format": "float",
+          "default": 2,
+          "maximum": 1000,
+          "minimum": 1
+        },
+        "radiusUnit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit `radius` is expressed in.",
+          "default": "PIXELS"
+        },
+        "segmentationClass": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The segmentation class the maxima get.",
+          "default": 0
+        }
+      }
+    },
     "GaussianBlurSettings": {
       "description": "Smooths an image and reduces background noise using a Gaussian kernel.\n\nThis algorithm applies a localized, bell-curve weighted blur that suppresses\nhigh-frequency pixel variations (like camera noise, salt-and-pepper artifacts,\nor dust) while preserving structural features. It is commonly used as a\npreprocessing step to optimize thresholding and edge detection tasks.",
       "type": "object",
@@ -2902,11 +3016,25 @@
           "description": "The size of the discrete Laplacian aperture.\n\nTypically 3. Larger sizes (5, 7) approximate the Laplacian of Gaussian (LoG)\nmore closely but are more computationally expensive. Must be an odd number.",
           "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "default": 3,
+          "maximum": 7,
+          "minimum": 3
         }
-      },
-      "required": [
-        "kernelSize"
+      }
+    },
+    "LibsLinkingMergeSplitAmountSettings": {
+      "description": "What a merge adds up and a split divides - telling a true merge or\nsplit from objects that only pass close by.",
+      "oneOf": [
+        {
+          "description": "The area: for objects that keep their size (e.g. cells).",
+          "type": "string",
+          "const": "AREA"
+        },
+        {
+          "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+          "type": "string",
+          "const": "INTENSITY"
+        }
       ]
     },
     "LoadAnnotatedObjectsSettings": {
@@ -3182,6 +3310,101 @@
           "type": "string",
           "const": "ABOVE"
         }
+      ]
+    },
+    "MeasureFilamentTreeSettings": {
+      "description": "Per traced segment (Trace Filaments) its branch level, Strahler order,\npath distance from the soma to its far end, length and straightness;\nper neuron (on its soma) the total length, the primary neurites, branch\npoints and tips, the highest branch level and the longest path. Lengths\nin pixels.\n\n[Trace Filaments] -> [Measure Filament Tree]",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"tree_01/...\").",
+          "type": "string"
+        },
+        "segments": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The segments measured (Trace Filaments' output class)."
+        },
+        "somata": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The somata (Trace Filaments' seeds): the per-neuron values go on them."
+        }
+      },
+      "required": [
+        "id",
+        "segments",
+        "somata"
       ]
     },
     "MeasureImageAreaOccupiedSettings": {
@@ -3778,6 +4001,225 @@
         "objects"
       ]
     },
+    "MeasureObjectShollSettings": {
+      "description": "Sholl analysis of skeletons: circles around a centre (the soma) at a\nfixed step, the skeleton's crossings per circle (a profile - the curve\nover the radius) and its summary: the most crossings, the critical and\nthe enclosing radius, the mean crossings and the Sholl regression\ncoefficient. Radii in pixels.\n\n[Skeletonize Objects] -> [Relate Objects (skeletons to somata)] -> [Measure Object Sholl]",
+      "type": "object",
+      "properties": {
+        "centreFrom": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The class of the centres (e.g. the somata), linked to the skeletons\nas their parents by Relate Objects: the circles are around its\ncentroid. Unset: around the skeleton's own centroid.",
+          "default": "UNSET"
+        },
+        "firstRadius": {
+          "description": "The radius of the first circle. 0: one step.",
+          "type": "number",
+          "format": "float",
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"sholl_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "lastRadius": {
+          "description": "The radius of the last circle. 0: up to the farthest skeleton pixel.\nSet it to compare neurons at the same radii.",
+          "type": "number",
+          "format": "float",
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0
+        },
+        "objects": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The skeletons measured (the skeleton class of Skeletonize Objects).",
+          "default": "UNSET"
+        },
+        "ringStep": {
+          "description": "The distance between two circles.",
+          "type": "number",
+          "format": "float",
+          "default": 10,
+          "maximum": 100000,
+          "minimum": 0.1
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit of the radii and the step.",
+          "default": "PIXELS"
+        }
+      }
+    },
+    "MeasureObjectSkeletonSettings": {
+      "description": "For each skeleton (Skeletonize Objects): its total length, the longest\npath through it, its end points, branch points and segments (the lines\nbetween them), their mean length and straightness (the straight\ndistance between a segment's ends / its length; loops don't count) and,\nwith \"Diameter from\", the mean diameter of the object it was made of\nalong it. Lengths in pixels.\n\n[Skeletonize Objects] -> [Relate Objects] -> [Measure Object Skeleton]",
+      "type": "object",
+      "properties": {
+        "diameterFrom": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The class of the objects the skeletons were made of (e.g. the\nneurites), linked to them as their parents by Relate Objects: the\ndiameter is twice the distance from the skeleton to their outline.\nUnset: no diameter.",
+          "default": "UNSET"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"skeleton_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "objects": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The skeletons measured (the skeleton class of Skeletonize Objects).",
+          "default": "UNSET"
+        }
+      }
+    },
     "MeasureObjectTextureSettings": {
       "description": "Measures the texture of a channel in each object of a class - Haralick's\nfeatures of the gray-level co-occurrence matrix, per object.\n\nThe same values as Measure Image Texture, of the object's pixels only.",
       "type": "object",
@@ -3883,6 +4325,124 @@
           "const": "EACH"
         }
       ]
+    },
+    "MeasureTrackMotionSettings": {
+      "description": "How each track moved: path, displacement, the CASA speeds and ratios\n(VCL, VSL, VAP, LIN, STR, WOB, ALH, BCF), turning angle and mean\nsquared displacement (α, D) - per track, in pixels and time points.\n\n[Track LAP / Kalman / ...] -> [Measure Track Motion]\n\nWith a drift reference (objects that don't swim, e.g. immotile cells or\nbeads, tracked too) the drift of the image is taken away first: the\nmedian step of the reference tracks from one time point to the next.",
+      "type": "object",
+      "properties": {
+        "averageOver": {
+          "description": "The average path (for VAP, STR, WOB, ALH, BCF): each position is\nthe mean of the positions this many time points before and after it.",
+          "type": "integer",
+          "format": "uint",
+          "default": 2,
+          "maximum": 100,
+          "minimum": 0
+        },
+        "driftReference": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "Objects that don't move by themselves (e.g. immotile cells, beads),\ntracked too: their median step is the image's drift and is taken\naway first. Unset: no drift correction.",
+          "default": "UNSET"
+        },
+        "id": {
+          "description": "The step's ID, unique in the project - its values' keys start with\nit (\"motion_01/...\").",
+          "type": "string",
+          "default": ""
+        },
+        "minStep": {
+          "description": "Steps shorter than this are joined with the next ones before the\nturning angle is taken - jitter of the centre isn't turning. The\npath and speeds use every step.",
+          "type": "number",
+          "format": "float",
+          "default": 1,
+          "maximum": 100000,
+          "minimum": 0
+        },
+        "objects": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The tracked objects measured (a tracking step must come before).",
+          "default": "UNSET"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit of the minimum step.",
+          "default": "PIXELS"
+        }
+      }
     },
     "MedianSubtractSettings": {
       "description": "A background subtraction filter that uses a median rank operator.\n\nThis algorithm is highly effective for removing large-scale background\nvariations while preserving small, high-contrast features. It works by\nestimating the background as the median intensity within a local radius.",
@@ -4553,7 +5113,7 @@
           "default": "UNSET"
         },
         "keepUnmatched": {
-          "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\nthe output (true), or drop it entirely - no output for it at all - (false).\n\nNote this is a policy override, not the literal mathematical result: e.g. for\n`And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\nstill leaves A untouched rather than emitting a zero-area object.",
+          "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\nthe output (true), or drop it entirely - no output for it at all - (false).\n\nNote this is a policy override, not the literal mathematical result: e.g. for\n`And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\nstill leaves A untouched rather than emitting a zero-area object.\n\nAn input object that has partners but whose result is empty is not \"unmatched\":\nthe result is empty, so there is nothing to keep regardless of this setting - no\noutput object is created, and in place the input object is removed. Unlike\nCellProfiler, which keeps zero-area objects to keep its label numbers one-to-one,\nnone are kept here, as they would leak NaN/zero measurements into statistics.",
           "type": "boolean",
           "default": true
         },
@@ -4567,7 +5127,7 @@
           "description": "Boolean set operation to apply",
           "oneOf": [
             {
-              "description": "Intersection: pixels present in both A and B. With no overlapping B, the\nresult is empty - there is nothing to keep regardless of `keep_unmatched`.",
+              "description": "Intersection: pixels present in both A and B.",
               "type": "string",
               "const": "AND"
             },
@@ -4895,10 +5455,10 @@
       ]
     },
     "ObjectObjectMathObjectSetOperationSettings": {
-      "description": "Boolean set operation applied between an `input_class` object (\"A\") and the union of\nits overlapping `other_class` ROIs (\"B\").",
+      "description": "Boolean set operation applied between an `input_class` object (\"A\") and the union of\nits overlapping `other_class` ROIs (\"B\").\n\nAny operation whose result has no pixels left (e.g. `Subtract` where B covers A,\n`Xor` of identical masks) yields no object: nothing is created, measured or stored,\nregardless of `keep_unmatched`. In place, the input object is removed.",
       "oneOf": [
         {
-          "description": "Intersection: pixels present in both A and B. With no overlapping B, the\nresult is empty - there is nothing to keep regardless of `keep_unmatched`.",
+          "description": "Intersection: pixels present in both A and B.",
           "type": "string",
           "const": "AND"
         },
@@ -5434,7 +5994,7 @@
                 "RECLASSIFY_IF_MATCH",
                 "RECLASSIFY_IF_NOT_MATCH"
               ],
-              "description": "What to do with object class labels after criteria evaluation\n\nControls whether the output class is added or existing classes are removed,\nand whether the action is triggered on a criteria **match** or a **non-match**:\n\n- **AddOutputClassIfMatch** - append the output class to objects that pass the criteria.\n- **AddOutputClassIfNotMatch** - append the output class to objects that fail the criteria.\n- **RemoveInputClassIfMatch / NotMatch** - strip all input classes from matching / non-matching objects.\n- **RemoveOutputClassIfMatch / NotMatch** - strip the output class from matching / non-matching objects.\n- **RemoveAllClassesIfMatch / NotMatch** - clear every class label from matching / non-matching objects.",
+              "description": "What to do with object class labels after criteria evaluation\n\nControls whether the output class is added or existing classes are removed,\nand whether the action is triggered on a criteria **match** or a **non-match**:\n\n- **AddOutputClassIfMatch** - append the output class to objects that pass the criteria.\n- **AddOutputClassIfNotMatch** - append the output class to objects that fail the criteria.\n- **RemoveInputClassIfMatch / NotMatch** - strip all input classes from matching / non-matching objects.\n- **RemoveOutputClassIfMatch / NotMatch** - strip the output class from matching / non-matching objects.\n- **RemoveAllClassesIfMatch / NotMatch** - clear every class label from matching / non-matching objects.\n\nWith no criterion set (every range at its default, edge touching\nallowed, no intensity filter, `overlapping_with` Unset) every object\nmatches - except for the three remove-on-match operations, where then\nnothing matches and nothing is removed.",
               "default": "REMOVE_ALL_CLASSES_IF_NOT_MATCH"
             },
             "maxAspectRatio": {
@@ -5628,7 +6188,7 @@
                   ]
                 }
               ],
-              "description": "Additional criterion: the object must intersect an object carrying this class\n\nIf unset (the default) this filter is not applied. When set, an object only\nsatisfies the overall criteria if it also overlaps at least one object carrying this\nclass by at least `min_intersection_size`. Combine with e.g.\n`RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\nor `AddOutputClassIfMatch` to tag objects that do.",
+              "description": "Additional criterion: the object must intersect an object carrying this class\n\nIf unset (the default) this filter is not applied - with a\nremove-on-match operation and no other criterion the step then\nremoves nothing: how a module switches an optional removal off\n(e.g. spots on tetraspecks, for images without them). When set, an object only\nsatisfies the overall criteria if it also overlaps at least one object carrying this\nclass by at least `min_intersection_size`. Combine with e.g.\n`RemoveAllClassesIfMatch` to drop objects that intersect another class's objects,\nor `AddOutputClassIfMatch` to tag objects that do.\nUnset with no other criterion set: the remove-on-match operations remove nothing.",
               "default": "UNSET"
             },
             "sizeUnit": {
@@ -6313,6 +6873,80 @@
           ]
         },
         {
+          "description": "Finds spots as local maxima: each pixel that is the brightest within the\nradius becomes one 1-pixel object.\n\n[Preprocessing (Gaussian Blur)] -> [Find Maxima] -> [Extract Objects] -> [Transform Objects (Draw Circle)]\n\nWrites the segmentation and the instance map (both replaced): the maxima\nget the segmentation class and one instance each; the image stays as it\nis. A plateau (equal neighbouring pixels) gives one maximum, its pixel\nnearest the plateau's centre; of equal maxima within the radius the one\nfound first (row order) is kept. Flat regions (a background of 0) are\nnever maxima.",
+          "type": "object",
+          "properties": {
+            "cutoff": {
+              "description": "How the quality cut-off is chosen. A maximum's quality is the image's\nvalue at it.\n\nManual: maxima above `min_quality` are kept.\nOtsu: Otsu's method on the qualities of all maxima of the image\nsplits spots from noise peaks; `min_quality` stays the lowest cut-off,\nso an image without spots doesn't turn its noise into spots.",
+              "type": "string",
+              "enum": [
+                "MANUAL",
+                "OTSU"
+              ],
+              "default": "MANUAL"
+            },
+            "excludeAtEdges": {
+              "description": "Drop maxima closer to the image border than the radius.",
+              "type": "boolean",
+              "default": false
+            },
+            "insideSegmentation": {
+              "description": "Only maxima on pixels of the current segmentation (any class, e.g.\nfrom a Threshold before) count. Brighter pixels outside it still\nsuppress maxima within the radius.",
+              "type": "boolean",
+              "default": false
+            },
+            "minQuality": {
+              "description": "Maxima with a quality at or below this value are dropped (with Otsu:\nthe lowest cut-off).",
+              "type": "number",
+              "format": "float",
+              "default": 0,
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "qualityUnit": {
+              "type": "string",
+              "enum": [
+                "BIT",
+                "PERCENT",
+                "RELATIVE"
+              ],
+              "description": "Unit used for `min_quality`.\n\nbit: 0 - 255/65535\n%: 0 - 100.0\nrel: 0 - 1.0",
+              "default": "BIT"
+            },
+            "radius": {
+              "description": "A pixel is a maximum only if no pixel within this radius is brighter.\nAbout half the spot diameter: smaller finds several maxima per spot,\nlarger merges neighbouring spots into one.",
+              "type": "number",
+              "format": "float",
+              "default": 2,
+              "maximum": 1000,
+              "minimum": 1
+            },
+            "radiusUnit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit `radius` is expressed in.",
+              "default": "PIXELS"
+            },
+            "segmentationClass": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "description": "The segmentation class the maxima get.",
+              "default": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "FIND_MAXIMA"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
           "description": "Smooths an image and reduces background noise using a Gaussian kernel.\n\nThis algorithm applies a localized, bell-curve weighted blur that suppresses\nhigh-frequency pixel variations (like camera noise, salt-and-pepper artifacts,\nor dust) while preserving structural features. It is commonly used as a\npreprocessing step to optimize thresholding and edge detection tasks.",
           "type": "object",
           "properties": {
@@ -6760,7 +7394,9 @@
               "description": "The size of the discrete Laplacian aperture.\n\nTypically 3. Larger sizes (5, 7) approximate the Laplacian of Gaussian (LoG)\nmore closely but are more computationally expensive. Must be an odd number.",
               "type": "integer",
               "format": "uint",
-              "minimum": 0
+              "default": 3,
+              "maximum": 7,
+              "minimum": 3
             },
             "type": {
               "type": "string",
@@ -6768,7 +7404,6 @@
             }
           },
           "required": [
-            "kernelSize",
             "type"
           ]
         },
@@ -6898,6 +7533,106 @@
             }
           },
           "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Per traced segment (Trace Filaments) its branch level, Strahler order,\npath distance from the soma to its far end, length and straightness;\nper neuron (on its soma) the total length, the primary neurites, branch\npoints and tips, the highest branch level and the longest path. Lengths\nin pixels.\n\n[Trace Filaments] -> [Measure Filament Tree]",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "The step's ID, unique in the project - its values' keys start with\nit (\"tree_01/...\").",
+              "type": "string"
+            },
+            "segments": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The segments measured (Trace Filaments' output class)."
+            },
+            "somata": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The somata (Trace Filaments' seeds): the per-neuron values go on them."
+            },
+            "type": {
+              "type": "string",
+              "const": "MEASURE_FILAMENT_TREE"
+            }
+          },
+          "required": [
+            "id",
+            "segments",
+            "somata",
             "type"
           ]
         },
@@ -7529,6 +8264,239 @@
           ]
         },
         {
+          "description": "Sholl analysis of skeletons: circles around a centre (the soma) at a\nfixed step, the skeleton's crossings per circle (a profile - the curve\nover the radius) and its summary: the most crossings, the critical and\nthe enclosing radius, the mean crossings and the Sholl regression\ncoefficient. Radii in pixels.\n\n[Skeletonize Objects] -> [Relate Objects (skeletons to somata)] -> [Measure Object Sholl]",
+          "type": "object",
+          "properties": {
+            "centreFrom": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The class of the centres (e.g. the somata), linked to the skeletons\nas their parents by Relate Objects: the circles are around its\ncentroid. Unset: around the skeleton's own centroid.",
+              "default": "UNSET"
+            },
+            "firstRadius": {
+              "description": "The radius of the first circle. 0: one step.",
+              "type": "number",
+              "format": "float",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            },
+            "id": {
+              "description": "The step's ID, unique in the project - its values' keys start with\nit (\"sholl_01/...\").",
+              "type": "string",
+              "default": ""
+            },
+            "lastRadius": {
+              "description": "The radius of the last circle. 0: up to the farthest skeleton pixel.\nSet it to compare neurons at the same radii.",
+              "type": "number",
+              "format": "float",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            },
+            "objects": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The skeletons measured (the skeleton class of Skeletonize Objects).",
+              "default": "UNSET"
+            },
+            "ringStep": {
+              "description": "The distance between two circles.",
+              "type": "number",
+              "format": "float",
+              "default": 10,
+              "maximum": 100000,
+              "minimum": 0.1
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit of the radii and the step.",
+              "default": "PIXELS"
+            },
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_SHOLL"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "For each skeleton (Skeletonize Objects): its total length, the longest\npath through it, its end points, branch points and segments (the lines\nbetween them), their mean length and straightness (the straight\ndistance between a segment's ends / its length; loops don't count) and,\nwith \"Diameter from\", the mean diameter of the object it was made of\nalong it. Lengths in pixels.\n\n[Skeletonize Objects] -> [Relate Objects] -> [Measure Object Skeleton]",
+          "type": "object",
+          "properties": {
+            "diameterFrom": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The class of the objects the skeletons were made of (e.g. the\nneurites), linked to them as their parents by Relate Objects: the\ndiameter is twice the distance from the skeleton to their outline.\nUnset: no diameter.",
+              "default": "UNSET"
+            },
+            "id": {
+              "description": "The step's ID, unique in the project - its values' keys start with\nit (\"skeleton_01/...\").",
+              "type": "string",
+              "default": ""
+            },
+            "objects": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The skeletons measured (the skeleton class of Skeletonize Objects).",
+              "default": "UNSET"
+            },
+            "type": {
+              "type": "string",
+              "const": "MEASURE_OBJECT_SKELETON"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
           "description": "Measures the texture of a channel in each object of a class - Haralick's\nfeatures of the gray-level co-occurrence matrix, per object.\n\nThe same values as Measure Image Texture, of the object's pixels only.",
           "type": "object",
           "properties": {
@@ -7620,6 +8588,131 @@
             "type": {
               "type": "string",
               "const": "MEASURE_OBJECT_TEXTURE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "How each track moved: path, displacement, the CASA speeds and ratios\n(VCL, VSL, VAP, LIN, STR, WOB, ALH, BCF), turning angle and mean\nsquared displacement (α, D) - per track, in pixels and time points.\n\n[Track LAP / Kalman / ...] -> [Measure Track Motion]\n\nWith a drift reference (objects that don't swim, e.g. immotile cells or\nbeads, tracked too) the drift of the image is taken away first: the\nmedian step of the reference tracks from one time point to the next.",
+          "type": "object",
+          "properties": {
+            "averageOver": {
+              "description": "The average path (for VAP, STR, WOB, ALH, BCF): each position is\nthe mean of the positions this many time points before and after it.",
+              "type": "integer",
+              "format": "uint",
+              "default": 2,
+              "maximum": 100,
+              "minimum": 0
+            },
+            "driftReference": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "Objects that don't move by themselves (e.g. immotile cells, beads),\ntracked too: their median step is the image's drift and is taken\naway first. Unset: no drift correction.",
+              "default": "UNSET"
+            },
+            "id": {
+              "description": "The step's ID, unique in the project - its values' keys start with\nit (\"motion_01/...\").",
+              "type": "string",
+              "default": ""
+            },
+            "minStep": {
+              "description": "Steps shorter than this are joined with the next ones before the\nturning angle is taken - jitter of the centre isn't turning. The\npath and speeds use every step.",
+              "type": "number",
+              "format": "float",
+              "default": 1,
+              "maximum": 100000,
+              "minimum": 0
+            },
+            "objects": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The tracked objects measured (a tracking step must come before).",
+              "default": "UNSET"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit of the minimum step.",
+              "default": "PIXELS"
+            },
+            "type": {
+              "type": "string",
+              "const": "MEASURE_TRACK_MOTION"
             }
           },
           "required": [
@@ -7763,7 +8856,7 @@
               "default": "UNSET"
             },
             "keepUnmatched": {
-              "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\nthe output (true), or drop it entirely - no output for it at all - (false).\n\nNote this is a policy override, not the literal mathematical result: e.g. for\n`And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\nstill leaves A untouched rather than emitting a zero-area object.",
+              "description": "When an input object has no qualifying overlapping partner: keep it unchanged in\nthe output (true), or drop it entirely - no output for it at all - (false).\n\nNote this is a policy override, not the literal mathematical result: e.g. for\n`And`, the true result of \"A and nothing\" is empty, but `keep_unmatched = true`\nstill leaves A untouched rather than emitting a zero-area object.\n\nAn input object that has partners but whose result is empty is not \"unmatched\":\nthe result is empty, so there is nothing to keep regardless of this setting - no\noutput object is created, and in place the input object is removed. Unlike\nCellProfiler, which keeps zero-area objects to keep its label numbers one-to-one,\nnone are kept here, as they would leak NaN/zero measurements into statistics.",
               "type": "boolean",
               "default": true
             },
@@ -7777,7 +8870,7 @@
               "description": "Boolean set operation to apply",
               "oneOf": [
                 {
-                  "description": "Intersection: pixels present in both A and B. With no overlapping B, the\nresult is empty - there is nothing to keep regardless of `keep_unmatched`.",
+                  "description": "Intersection: pixels present in both A and B.",
                   "type": "string",
                   "const": "AND"
                 },
@@ -8325,17 +9418,10 @@
           ]
         },
         {
-          "description": "Links each object to the nearest one in the next frame.\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked closest pair first, each object once, if they are at\nmost `max_distance` apart. Every object gets a track id; one that can't\nbe linked starts a new track.",
+          "description": "Reduces each object to its 1-pixel-wide centre line (skeleton), for\nfilament analysis (neurites, vessels, fibres).\n\n[Threshold] -> [Extract Objects] -> [Skeletonize Objects] -> [Relate Objects] -> [Measure Object Skeleton]\n\nEach object of the input class gets one skeleton object; branch points\nand end points can become 1-pixel objects of their own classes. Spurs\nshorter than the minimum branch length are pruned. The input objects\nstay as they are; link skeletons and points to them with Relate Objects.",
           "type": "object",
           "properties": {
-            "maxDistance": {
-              "description": "How far an object may move from one frame to the next.\n\nFarther apart, it starts a new track.",
-              "type": "number",
-              "format": "float",
-              "default": 10000,
-              "minimum": 0
-            },
-            "objectClass": {
+            "branchPointClass": {
               "oneOf": [
                 {
                   "type": "string",
@@ -8373,21 +9459,152 @@
                   ]
                 }
               ],
-              "description": "Object class to track.",
+              "description": "The class the branch points get (one 1-pixel object each). Unset:\nnone are created.",
               "default": "UNSET"
             },
-            "unit": {
+            "endPointClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The class the end points get (one 1-pixel object each). Unset: none\nare created.",
+              "default": "UNSET"
+            },
+            "inputClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "Objects carrying this class are skeletonized (e.g. the thresholded\nneurites).",
+              "default": "UNSET"
+            },
+            "lengthUnit": {
               "type": "string",
               "enum": [
                 "NANO_METER",
                 "PIXELS"
               ],
-              "description": "Unit in which `max_distance` is expressed (e.g. pixels, nm).",
-              "default": "NANO_METER"
+              "description": "Unit `min_branch_length` is expressed in.",
+              "default": "PIXELS"
+            },
+            "minBranchLength": {
+              "description": "Side branches shorter than this (from their end point to the branch\npoint) are removed - the spurs a ragged outline leaves. 0: none are\nremoved.",
+              "type": "number",
+              "format": "float",
+              "default": 5,
+              "maximum": 100000,
+              "minimum": 0
+            },
+            "skeletonClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The class the skeletons get (one per input object).",
+              "default": "UNSET"
             },
             "type": {
               "type": "string",
-              "const": "SIMPLE_TRACKER"
+              "const": "SKELETONIZE_OBJECTS"
             }
           },
           "required": [
@@ -8410,6 +9627,48 @@
               "default": 0.30000001192092896,
               "maximum": 1,
               "minimum": 0
+            },
+            "pieceSize": {
+              "description": "How large the pieces are that a large tile runs through the network\nin: smaller ones take less RAM, larger ones are faster.",
+              "oneOf": [
+                {
+                  "description": "As large as the computer's RAM allows (2048, 1024 or 512) for a\nmodel seeing a limited neighbourhood - its result is the same\nwhatever the size, up to float rounding; 1024 on every computer for\na model normalizing by the whole image (InstanceNorm), whose result\nthe size changes a little.",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "AUTO"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "description": "The same pieces for every model on every computer.",
+                  "type": "object",
+                  "properties": {
+                    "side": {
+                      "description": "Pixels per side of a piece.",
+                      "type": "integer",
+                      "format": "int32",
+                      "maximum": 4096,
+                      "minimum": 256
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "FIXED"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "side"
+                  ]
+                }
+              ],
+              "default": {
+                "type": "AUTO"
+              }
             },
             "probabilityThreshold": {
               "description": "Probability above which a grid cell is considered a candidate object center.",
@@ -8504,7 +9763,626 @@
           ]
         },
         {
-          "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\nThis command applies a geometric transform (scale, circle, fitted ellipse) to every object\ncarrying `input_class`. The transformed shape keeps the original object's bounding-box center.\nIf `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\notherwise a new object carrying `output_class` is created alongside the untouched input object.",
+          "description": "Traces each neuron as a tree from its soma to its tips (the end points\nof Skeletonize Objects) along the cheapest paths - bridging dim gaps and\ngiving each tip to the soma reaching it most cheaply - and splits it\ninto segments at its branch points.\n\n[Skeletonize Objects (end points)] -> [Trace Filaments] -> [Measure Filament Tree]\n\nEach segment is a 1-pixel-wide object of the output class, linked to the\nnext segment towards the soma (a root segment: none) and to its soma.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "description": "The channel the neurites are in (their stain).",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "default": 0
+            },
+            "followFibres": {
+              "description": "Follow tube-shaped structures (vesselness of the channel at the\nfibre widths) - else the brightness alone, which also follows blobs\nand debris.",
+              "type": "boolean",
+              "default": true
+            },
+            "maxReach": {
+              "description": "How far from its soma a tip may be: the search window (soma box grown\nby this) - its RAM grows with its area (about 25 bytes per pixel,\na window per thread).",
+              "type": "number",
+              "format": "float",
+              "default": 300,
+              "maximum": 100000,
+              "minimum": 1
+            },
+            "maxWidth": {
+              "description": "The widest fibres to follow.",
+              "type": "number",
+              "format": "float",
+              "default": 6,
+              "maximum": 1000,
+              "minimum": 0.5
+            },
+            "minBranchLength": {
+              "description": "Side branches shorter than this are removed.",
+              "type": "number",
+              "format": "float",
+              "default": 5,
+              "maximum": 100000,
+              "minimum": 0
+            },
+            "minWidth": {
+              "description": "The thinnest fibres to follow.",
+              "type": "number",
+              "format": "float",
+              "default": 2,
+              "maximum": 1000,
+              "minimum": 0.5
+            },
+            "outputClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The class the segments get.",
+              "default": "UNSET"
+            },
+            "seeds": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The somata: each the root of one tree.",
+              "default": "UNSET"
+            },
+            "targets": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "The tips to reach (e.g. the end points of Skeletonize Objects).",
+              "default": "UNSET"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit of the widths, the reach and the branch length.",
+              "default": "PIXELS"
+            },
+            "type": {
+              "type": "string",
+              "const": "TRACE_FILAMENTS"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Links objects into tracks by the globally best assignment, predicting\neach track's next position from its velocity (directed motion).\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked so that the sum of the squared distances to the\npredicted positions is smallest, each object once. Each track's velocity\nis followed by a Kalman filter. Then track ends are linked to starts up\nto `max_gap_frames` later, and - if switched on - track ends into other\ntracks (merge) and starts out of them (split), as in Track LAP.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "description": "The channel of the intensity, if `merge_split_amount` is the\nintensity.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "default": 0
+            },
+            "initialMaxDistance": {
+              "description": "How far a new track's second object may be from its first - the\nfastest an object moves per frame.",
+              "type": "number",
+              "format": "float",
+              "default": 15000,
+              "minimum": 0
+            },
+            "maxDistance": {
+              "description": "How far an object may be from where its track predicts it - also\nthe farthest a merge or split partner may be.",
+              "type": "number",
+              "format": "float",
+              "default": 5000,
+              "minimum": 0
+            },
+            "maxGapDistance": {
+              "description": "How far an object may be from where its track predicts it after a\ngap.",
+              "type": "number",
+              "format": "float",
+              "default": 10000,
+              "minimum": 0
+            },
+            "maxGapFrames": {
+              "description": "How many frames in a row an object may be missing and its track\nstill continue. 0: no gap closing.",
+              "type": "integer",
+              "format": "uint",
+              "default": 2,
+              "maximum": 100,
+              "minimum": 0
+            },
+            "mergeSplitAmount": {
+              "description": "What a merge adds up and a split divides.",
+              "oneOf": [
+                {
+                  "description": "The area: for objects that keep their size (e.g. cells).",
+                  "type": "string",
+                  "const": "AREA"
+                },
+                {
+                  "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+                  "type": "string",
+                  "const": "INTENSITY"
+                }
+              ],
+              "default": "INTENSITY"
+            },
+            "merging": {
+              "description": "Detect two objects merging into one (e.g. vesicle fusion).",
+              "type": "boolean",
+              "default": false
+            },
+            "objectClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "Object class to track.",
+              "default": "UNSET"
+            },
+            "positionNoise": {
+              "description": "How exactly an object's position is known (its standard deviation)\n- the larger, the more the predictions follow the velocity rather\nthan the last position.",
+              "type": "number",
+              "format": "float",
+              "default": 200,
+              "minimum": 0
+            },
+            "splitting": {
+              "description": "Detect one object splitting into two (e.g. a vesicle budding off).",
+              "type": "boolean",
+              "default": false
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit of the distances (e.g. pixels, nm).",
+              "default": "NANO_METER"
+            },
+            "velocityNoise": {
+              "description": "How much the velocity changes from one frame to the next (standard\ndeviation) - the larger, the faster a track follows a turn.",
+              "type": "number",
+              "format": "float",
+              "default": 1000,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "TRACK_KALMAN"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Links objects into tracks by the globally best assignment, for objects\nmoving at random (Brownian motion).\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked so that the sum of the squared distances is smallest,\neach object once (Jaqaman et al., 2008). Then track ends are linked to\nstarts up to `max_gap_frames` later (an object missed by the\nsegmentation), and - if switched on - track ends into other tracks\n(merge) and starts out of them (split). A merge or split starts new\ntracks, with the old ones as parents.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "description": "The channel of the intensity, if `merge_split_amount` is the\nintensity.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "default": 0
+            },
+            "maxDistance": {
+              "description": "How far an object may move from one frame to the next - also the\nfarthest a merge or split partner may be.",
+              "type": "number",
+              "format": "float",
+              "default": 10000,
+              "minimum": 0
+            },
+            "maxGapDistance": {
+              "description": "How far an object may move while it is missing.",
+              "type": "number",
+              "format": "float",
+              "default": 15000,
+              "minimum": 0
+            },
+            "maxGapFrames": {
+              "description": "How many frames in a row an object may be missing and its track\nstill continue. 0: no gap closing.",
+              "type": "integer",
+              "format": "uint",
+              "default": 2,
+              "maximum": 100,
+              "minimum": 0
+            },
+            "mergeSplitAmount": {
+              "description": "What a merge adds up and a split divides.",
+              "oneOf": [
+                {
+                  "description": "The area: for objects that keep their size (e.g. cells).",
+                  "type": "string",
+                  "const": "AREA"
+                },
+                {
+                  "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+                  "type": "string",
+                  "const": "INTENSITY"
+                }
+              ],
+              "default": "AREA"
+            },
+            "merging": {
+              "description": "Detect two objects merging into one (e.g. vesicle fusion).",
+              "type": "boolean",
+              "default": false
+            },
+            "objectClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "Object class to track.",
+              "default": "UNSET"
+            },
+            "splitting": {
+              "description": "Detect one object splitting into two (e.g. cell division).",
+              "type": "boolean",
+              "default": false
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit of the distances (e.g. pixels, nm).",
+              "default": "NANO_METER"
+            },
+            "type": {
+              "type": "string",
+              "const": "TRACK_LAP"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Links each object to the nearest one in the next frame.\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked closest pair first, each object once, if they are at\nmost `max_distance` apart. Every object gets a track id; one that can't\nbe linked starts a new track.",
+          "type": "object",
+          "properties": {
+            "maxDistance": {
+              "description": "How far an object may move from one frame to the next.\n\nFarther apart, it starts a new track.",
+              "type": "number",
+              "format": "float",
+              "default": 10000,
+              "minimum": 0
+            },
+            "objectClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "Object class to track.",
+              "default": "UNSET"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit in which `max_distance` is expressed (e.g. pixels, nm).",
+              "default": "NANO_METER"
+            },
+            "type": {
+              "type": "string",
+              "const": "TRACK_NEAREST_NEIGHBOR"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Links objects into tracks by the globally best assignment of\noverlapping masks.\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked so that they overlap the most in total, each object\nonce - two objects can be linked if their intersection over union is\nat least `min_overlap`. Then track ends are linked to starts up to\n`max_gap_frames` later, and - if switched on - track ends into other\ntracks (merge) and starts out of them (split). A merge or split starts\nnew tracks, with the old ones as parents.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "description": "The channel of the intensity, if `merge_split_amount` is the\nintensity.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "default": 0
+            },
+            "maxGapFrames": {
+              "description": "How many frames in a row an object may be missing and its track\nstill continue. 0: no gap closing.",
+              "type": "integer",
+              "format": "uint",
+              "default": 2,
+              "maximum": 100,
+              "minimum": 0
+            },
+            "mergeSplitAmount": {
+              "description": "What a merge adds up and a split divides.",
+              "oneOf": [
+                {
+                  "description": "The area: for objects that keep their size (e.g. cells).",
+                  "type": "string",
+                  "const": "AREA"
+                },
+                {
+                  "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+                  "type": "string",
+                  "const": "INTENSITY"
+                }
+              ],
+              "default": "AREA"
+            },
+            "merging": {
+              "description": "Detect two objects merging into one.",
+              "type": "boolean",
+              "default": false
+            },
+            "minOverlap": {
+              "description": "How much two objects must overlap to be linked: intersection over\nunion, from 0 to 1 (1: the same mask). For a merge or split, the\npart of the smaller object inside the bigger one.",
+              "type": "number",
+              "format": "float",
+              "default": 0.30000001192092896,
+              "maximum": 1,
+              "minimum": 0.01
+            },
+            "objectClass": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "UNSET"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "GLOBAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "GLOBAL"
+                  ]
+                },
+                {
+                  "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+                  "type": "object",
+                  "properties": {
+                    "LOCAL": {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "LOCAL"
+                  ]
+                }
+              ],
+              "description": "Object class to track.",
+              "default": "UNSET"
+            },
+            "splitting": {
+              "description": "Detect one object splitting into two (e.g. cell division).",
+              "type": "boolean",
+              "default": false
+            },
+            "type": {
+              "type": "string",
+              "const": "TRACK_OVERLAP"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\nThis command applies a geometric transform (scale, circle, fitted ellipse) to every object\ncarrying `input_class`. The transformed shape keeps the original object's bounding-box center.\nIf `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\notherwise a new object carrying `output_class` is created alongside the untouched input object.\n\nA transformed shape with no pixels left (e.g. `Shrink` by more than the object's own\nsize) is not an object: no new object is created, and in place the input object is removed.",
           "type": "object",
           "properties": {
             "function": {
@@ -8878,6 +10756,48 @@
               ],
               "default": "SOFTMAX_CLASSES"
             },
+            "pieceSize": {
+              "description": "How large the pieces are that a large tile runs through the network\nin: smaller ones take less RAM, larger ones are faster.",
+              "oneOf": [
+                {
+                  "description": "As large as the computer's RAM allows (2048, 1024 or 512) for a\nmodel seeing a limited neighbourhood - its result is the same\nwhatever the size, up to float rounding; 1024 on every computer for\na model normalizing by the whole image (InstanceNorm), whose result\nthe size changes a little.",
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "AUTO"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "description": "The same pieces for every model on every computer.",
+                  "type": "object",
+                  "properties": {
+                    "side": {
+                      "description": "Pixels per side of a piece.",
+                      "type": "integer",
+                      "format": "int32",
+                      "maximum": 4096,
+                      "minimum": 256
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "FIXED"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "side"
+                  ]
+                }
+              ],
+              "default": {
+                "type": "AUTO"
+              }
+            },
             "probabilityThreshold": {
               "description": "Probability above which a pixel is classified as foreground.",
               "type": "number",
@@ -8896,6 +10816,77 @@
             "type": {
               "type": "string",
               "const": "U_NET"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Highlights lines (fibres, neurites, vessels) of the given widths, so a\nthreshold segments them (Frangi vesselness).\n\n[Vesselness] -> [Threshold] -> [Connected Components] -> [Extract Objects] -> [Skeletonize Objects]\n\nThe result is 0..1: high in the middle of a line, low for the\nbackground, blobs and flat areas.",
+          "type": "object",
+          "properties": {
+            "blobSuppression": {
+              "description": "How strongly blobs are suppressed (Frangi's β): lower suppresses\nmore, so only clearly elongated structures stay.",
+              "type": "number",
+              "format": "float",
+              "default": 0.5,
+              "maximum": 5,
+              "minimum": 0.05
+            },
+            "maxWidth": {
+              "description": "The width of the widest lines to find.",
+              "type": "number",
+              "format": "float",
+              "default": 6,
+              "maximum": 1000,
+              "minimum": 0.5
+            },
+            "minWidth": {
+              "description": "The width of the thinnest lines to find.",
+              "type": "number",
+              "format": "float",
+              "default": 2,
+              "maximum": 1000,
+              "minimum": 0.5
+            },
+            "noiseLevel": {
+              "description": "Structures much weaker than this count as noise (Frangi's c, on the\nrelative 0..1 scale of the image's second derivatives). 0:\nautomatic - half the strongest structure in the image (on a whole\nslide: in each tile).",
+              "type": "number",
+              "format": "float",
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0
+            },
+            "polarity": {
+              "description": "Bright lines on a dark background (fluorescence) or dark lines on a\nbright one (brightfield).",
+              "type": "string",
+              "enum": [
+                "BRIGHT",
+                "DARK"
+              ],
+              "default": "BRIGHT"
+            },
+            "widthSteps": {
+              "description": "How many widths between the thinnest and the widest are tried\n(spaced evenly on a log scale). More: steadier response over the\nwidths, slower.",
+              "type": "integer",
+              "format": "uint",
+              "default": 3,
+              "maximum": 10,
+              "minimum": 1
+            },
+            "widthUnit": {
+              "type": "string",
+              "enum": [
+                "NANO_METER",
+                "PIXELS"
+              ],
+              "description": "Unit the widths are expressed in.",
+              "default": "PIXELS"
+            },
+            "type": {
+              "type": "string",
+              "const": "VESSELNESS"
             }
           },
           "required": [
@@ -9783,7 +11774,9 @@
         "list",
         "plate",
         "charts",
-        "tracks"
+        "tracks",
+        "paths",
+        "trees"
       ]
     },
     "ResultsViews": {
@@ -9910,6 +11903,14 @@
       "type": "integer",
       "format": "uint32",
       "minimum": 0
+    },
+    "SegmentationFindMaximaMaximaCutoffSettings": {
+      "description": "How [`FindMaxima`] chooses its quality cut-off.",
+      "type": "string",
+      "enum": [
+        "MANUAL",
+        "OTSU"
+      ]
     },
     "SegmentationMappingSettings": {
       "description": "Maps one class the model was trained to predict to a class ID meaningful\nin this project. Model class IDs are a snapshot taken at training time\n(see `evanalyzer_cfg::PixelClassLabel`'s doc comment) and aren't\nguaranteed to line up with this project's own `SegmentationClass` IDs -\nthis is the bridge between the two.",
@@ -10345,18 +12346,26 @@
         "objects"
       ]
     },
-    "SimpleTrackerSettings": {
-      "description": "Links each object to the nearest one in the next frame.\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked closest pair first, each object once, if they are at\nmost `max_distance` apart. Every object gets a track id; one that can't\nbe linked starts a new track.",
+    "SizeUnits": {
+      "type": "string",
+      "enum": [
+        "NANO_METER",
+        "PIXELS"
+      ]
+    },
+    "SizeUnitsRel": {
+      "type": "string",
+      "enum": [
+        "NANO_METER",
+        "PIXELS",
+        "PERCENT"
+      ]
+    },
+    "SkeletonizeObjectsSettings": {
+      "description": "Reduces each object to its 1-pixel-wide centre line (skeleton), for\nfilament analysis (neurites, vessels, fibres).\n\n[Threshold] -> [Extract Objects] -> [Skeletonize Objects] -> [Relate Objects] -> [Measure Object Skeleton]\n\nEach object of the input class gets one skeleton object; branch points\nand end points can become 1-pixel objects of their own classes. Spurs\nshorter than the minimum branch length are pruned. The input objects\nstay as they are; link skeletons and points to them with Relate Objects.",
       "type": "object",
       "properties": {
-        "maxDistance": {
-          "description": "How far an object may move from one frame to the next.\n\nFarther apart, it starts a new track.",
-          "type": "number",
-          "format": "float",
-          "default": 10000,
-          "minimum": 0
-        },
-        "objectClass": {
+        "branchPointClass": {
           "oneOf": [
             {
               "type": "string",
@@ -10394,34 +12403,150 @@
               ]
             }
           ],
-          "description": "Object class to track.",
+          "description": "The class the branch points get (one 1-pixel object each). Unset:\nnone are created.",
           "default": "UNSET"
         },
-        "unit": {
+        "endPointClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The class the end points get (one 1-pixel object each). Unset: none\nare created.",
+          "default": "UNSET"
+        },
+        "inputClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "Objects carrying this class are skeletonized (e.g. the thresholded\nneurites).",
+          "default": "UNSET"
+        },
+        "lengthUnit": {
           "type": "string",
           "enum": [
             "NANO_METER",
             "PIXELS"
           ],
-          "description": "Unit in which `max_distance` is expressed (e.g. pixels, nm).",
-          "default": "NANO_METER"
+          "description": "Unit `min_branch_length` is expressed in.",
+          "default": "PIXELS"
+        },
+        "minBranchLength": {
+          "description": "Side branches shorter than this (from their end point to the branch\npoint) are removed - the spurs a ragged outline leaves. 0: none are\nremoved.",
+          "type": "number",
+          "format": "float",
+          "default": 5,
+          "maximum": 100000,
+          "minimum": 0
+        },
+        "skeletonClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The class the skeletons get (one per input object).",
+          "default": "UNSET"
         }
       }
-    },
-    "SizeUnits": {
-      "type": "string",
-      "enum": [
-        "NANO_METER",
-        "PIXELS"
-      ]
-    },
-    "SizeUnitsRel": {
-      "type": "string",
-      "enum": [
-        "NANO_METER",
-        "PIXELS",
-        "PERCENT"
-      ]
     },
     "StardistSettings": {
       "description": "Instance segmentation using a pretrained StarDist model exported as TorchScript.\n\nThe model is expected to accept a `[1, 1, H, W]` float tensor (single-channel,\nsame normalization as the rest of the pipeline) and return two tensors:\nan object-probability map `[1, 1, H', W']` and a ray-distance map\n`[1, n_rays, H', W']` giving, for each grid cell, the distance to the object\nboundary along `n_rays` equally-spaced angles (the StarDist star-convex-polygon\nrepresentation). `H'`/`W'` may be smaller than the input size if the model\npredicts on a coarser grid; this is detected from the output shape and the\npolygons are rescaled back to image resolution automatically.\n\nSome TorchScript exports concatenate both outputs into a single\n`[1, 1 + n_rays, H', W']` tensor (channel 0 = probability, the rest =\ndistances); this is also supported.\n\nPer grid cell candidates above `probability_threshold` are converted to\nstar-convex polygons, then greedily filtered with non-maximum suppression\n(polygons whose pixel-overlap ratio with a higher-scoring candidate exceeds\n`nms_threshold` are discarded) before being rasterized into the pipeline's\nsegmentation and instance maps. Runs on GPU automatically if CUDA is\navailable in the linked libtorch build, otherwise falls back to CPU.",
@@ -10439,6 +12564,48 @@
           "default": 0.30000001192092896,
           "maximum": 1,
           "minimum": 0
+        },
+        "pieceSize": {
+          "description": "How large the pieces are that a large tile runs through the network\nin: smaller ones take less RAM, larger ones are faster.",
+          "oneOf": [
+            {
+              "description": "As large as the computer's RAM allows (2048, 1024 or 512) for a\nmodel seeing a limited neighbourhood - its result is the same\nwhatever the size, up to float rounding; 1024 on every computer for\na model normalizing by the whole image (InstanceNorm), whose result\nthe size changes a little.",
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "AUTO"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            {
+              "description": "The same pieces for every model on every computer.",
+              "type": "object",
+              "properties": {
+                "side": {
+                  "description": "Pixels per side of a piece.",
+                  "type": "integer",
+                  "format": "int32",
+                  "maximum": 4096,
+                  "minimum": 256
+                },
+                "type": {
+                  "type": "string",
+                  "const": "FIXED"
+                }
+              },
+              "required": [
+                "type",
+                "side"
+              ]
+            }
+          ],
+          "default": {
+            "type": "AUTO"
+          }
         },
         "probabilityThreshold": {
           "description": "Probability above which a grid cell is considered a candidate object center.",
@@ -10933,10 +13100,594 @@
         }
       }
     },
+    "TraceFilamentsSettings": {
+      "description": "Traces each neuron as a tree from its soma to its tips (the end points\nof Skeletonize Objects) along the cheapest paths - bridging dim gaps and\ngiving each tip to the soma reaching it most cheaply - and splits it\ninto segments at its branch points.\n\n[Skeletonize Objects (end points)] -> [Trace Filaments] -> [Measure Filament Tree]\n\nEach segment is a 1-pixel-wide object of the output class, linked to the\nnext segment towards the soma (a root segment: none) and to its soma.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel the neurites are in (their stain).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "followFibres": {
+          "description": "Follow tube-shaped structures (vesselness of the channel at the\nfibre widths) - else the brightness alone, which also follows blobs\nand debris.",
+          "type": "boolean",
+          "default": true
+        },
+        "maxReach": {
+          "description": "How far from its soma a tip may be: the search window (soma box grown\nby this) - its RAM grows with its area (about 25 bytes per pixel,\na window per thread).",
+          "type": "number",
+          "format": "float",
+          "default": 300,
+          "maximum": 100000,
+          "minimum": 1
+        },
+        "maxWidth": {
+          "description": "The widest fibres to follow.",
+          "type": "number",
+          "format": "float",
+          "default": 6,
+          "maximum": 1000,
+          "minimum": 0.5
+        },
+        "minBranchLength": {
+          "description": "Side branches shorter than this are removed.",
+          "type": "number",
+          "format": "float",
+          "default": 5,
+          "maximum": 100000,
+          "minimum": 0
+        },
+        "minWidth": {
+          "description": "The thinnest fibres to follow.",
+          "type": "number",
+          "format": "float",
+          "default": 2,
+          "maximum": 1000,
+          "minimum": 0.5
+        },
+        "outputClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The class the segments get.",
+          "default": "UNSET"
+        },
+        "seeds": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The somata: each the root of one tree.",
+          "default": "UNSET"
+        },
+        "targets": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "The tips to reach (e.g. the end points of Skeletonize Objects).",
+          "default": "UNSET"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit of the widths, the reach and the branch length.",
+          "default": "PIXELS"
+        }
+      }
+    },
     "TrackId": {
       "type": "integer",
       "format": "uint64",
       "minimum": 0
+    },
+    "TrackKalmanSettings": {
+      "description": "Links objects into tracks by the globally best assignment, predicting\neach track's next position from its velocity (directed motion).\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked so that the sum of the squared distances to the\npredicted positions is smallest, each object once. Each track's velocity\nis followed by a Kalman filter. Then track ends are linked to starts up\nto `max_gap_frames` later, and - if switched on - track ends into other\ntracks (merge) and starts out of them (split), as in Track LAP.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel of the intensity, if `merge_split_amount` is the\nintensity.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "initialMaxDistance": {
+          "description": "How far a new track's second object may be from its first - the\nfastest an object moves per frame.",
+          "type": "number",
+          "format": "float",
+          "default": 15000,
+          "minimum": 0
+        },
+        "maxDistance": {
+          "description": "How far an object may be from where its track predicts it - also\nthe farthest a merge or split partner may be.",
+          "type": "number",
+          "format": "float",
+          "default": 5000,
+          "minimum": 0
+        },
+        "maxGapDistance": {
+          "description": "How far an object may be from where its track predicts it after a\ngap.",
+          "type": "number",
+          "format": "float",
+          "default": 10000,
+          "minimum": 0
+        },
+        "maxGapFrames": {
+          "description": "How many frames in a row an object may be missing and its track\nstill continue. 0: no gap closing.",
+          "type": "integer",
+          "format": "uint",
+          "default": 2,
+          "maximum": 100,
+          "minimum": 0
+        },
+        "mergeSplitAmount": {
+          "description": "What a merge adds up and a split divides.",
+          "oneOf": [
+            {
+              "description": "The area: for objects that keep their size (e.g. cells).",
+              "type": "string",
+              "const": "AREA"
+            },
+            {
+              "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+              "type": "string",
+              "const": "INTENSITY"
+            }
+          ],
+          "default": "INTENSITY"
+        },
+        "merging": {
+          "description": "Detect two objects merging into one (e.g. vesicle fusion).",
+          "type": "boolean",
+          "default": false
+        },
+        "objectClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "Object class to track.",
+          "default": "UNSET"
+        },
+        "positionNoise": {
+          "description": "How exactly an object's position is known (its standard deviation)\n- the larger, the more the predictions follow the velocity rather\nthan the last position.",
+          "type": "number",
+          "format": "float",
+          "default": 200,
+          "minimum": 0
+        },
+        "splitting": {
+          "description": "Detect one object splitting into two (e.g. a vesicle budding off).",
+          "type": "boolean",
+          "default": false
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit of the distances (e.g. pixels, nm).",
+          "default": "NANO_METER"
+        },
+        "velocityNoise": {
+          "description": "How much the velocity changes from one frame to the next (standard\ndeviation) - the larger, the faster a track follows a turn.",
+          "type": "number",
+          "format": "float",
+          "default": 1000,
+          "minimum": 0
+        }
+      }
+    },
+    "TrackLapSettings": {
+      "description": "Links objects into tracks by the globally best assignment, for objects\nmoving at random (Brownian motion).\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked so that the sum of the squared distances is smallest,\neach object once (Jaqaman et al., 2008). Then track ends are linked to\nstarts up to `max_gap_frames` later (an object missed by the\nsegmentation), and - if switched on - track ends into other tracks\n(merge) and starts out of them (split). A merge or split starts new\ntracks, with the old ones as parents.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel of the intensity, if `merge_split_amount` is the\nintensity.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "maxDistance": {
+          "description": "How far an object may move from one frame to the next - also the\nfarthest a merge or split partner may be.",
+          "type": "number",
+          "format": "float",
+          "default": 10000,
+          "minimum": 0
+        },
+        "maxGapDistance": {
+          "description": "How far an object may move while it is missing.",
+          "type": "number",
+          "format": "float",
+          "default": 15000,
+          "minimum": 0
+        },
+        "maxGapFrames": {
+          "description": "How many frames in a row an object may be missing and its track\nstill continue. 0: no gap closing.",
+          "type": "integer",
+          "format": "uint",
+          "default": 2,
+          "maximum": 100,
+          "minimum": 0
+        },
+        "mergeSplitAmount": {
+          "description": "What a merge adds up and a split divides.",
+          "oneOf": [
+            {
+              "description": "The area: for objects that keep their size (e.g. cells).",
+              "type": "string",
+              "const": "AREA"
+            },
+            {
+              "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+              "type": "string",
+              "const": "INTENSITY"
+            }
+          ],
+          "default": "AREA"
+        },
+        "merging": {
+          "description": "Detect two objects merging into one (e.g. vesicle fusion).",
+          "type": "boolean",
+          "default": false
+        },
+        "objectClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "Object class to track.",
+          "default": "UNSET"
+        },
+        "splitting": {
+          "description": "Detect one object splitting into two (e.g. cell division).",
+          "type": "boolean",
+          "default": false
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit of the distances (e.g. pixels, nm).",
+          "default": "NANO_METER"
+        }
+      }
+    },
+    "TrackNearestNeighborSettings": {
+      "description": "Links each object to the nearest one in the next frame.\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked closest pair first, each object once, if they are at\nmost `max_distance` apart. Every object gets a track id; one that can't\nbe linked starts a new track.",
+      "type": "object",
+      "properties": {
+        "maxDistance": {
+          "description": "How far an object may move from one frame to the next.\n\nFarther apart, it starts a new track.",
+          "type": "number",
+          "format": "float",
+          "default": 10000,
+          "minimum": 0
+        },
+        "objectClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "Object class to track.",
+          "default": "UNSET"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit in which `max_distance` is expressed (e.g. pixels, nm).",
+          "default": "NANO_METER"
+        }
+      }
+    },
+    "TrackOverlapSettings": {
+      "description": "Links objects into tracks by the globally best assignment of\noverlapping masks.\n\nObjects of `object_class` in two consecutive frames of the same image and\nz-plane are linked so that they overlap the most in total, each object\nonce - two objects can be linked if their intersection over union is\nat least `min_overlap`. Then track ends are linked to starts up to\n`max_gap_frames` later, and - if switched on - track ends into other\ntracks (merge) and starts out of them (split). A merge or split starts\nnew tracks, with the old ones as parents.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "The channel of the intensity, if `merge_split_amount` is the\nintensity.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "maxGapFrames": {
+          "description": "How many frames in a row an object may be missing and its track\nstill continue. 0: no gap closing.",
+          "type": "integer",
+          "format": "uint",
+          "default": 2,
+          "maximum": 100,
+          "minimum": 0
+        },
+        "mergeSplitAmount": {
+          "description": "What a merge adds up and a split divides.",
+          "oneOf": [
+            {
+              "description": "The area: for objects that keep their size (e.g. cells).",
+              "type": "string",
+              "const": "AREA"
+            },
+            {
+              "description": "The summed intensity of `channel` (mean times area): for spots\nbelow the resolution limit (e.g. vesicles), whose brightness adds\nup but whose size doesn't.",
+              "type": "string",
+              "const": "INTENSITY"
+            }
+          ],
+          "default": "AREA"
+        },
+        "merging": {
+          "description": "Detect two objects merging into one.",
+          "type": "boolean",
+          "default": false
+        },
+        "minOverlap": {
+          "description": "How much two objects must overlap to be linked: intersection over\nunion, from 0 to 1 (1: the same mask). For a merge or split, the\npart of the smaller object inside the bigger one.",
+          "type": "number",
+          "format": "float",
+          "default": 0.30000001192092896,
+          "maximum": 1,
+          "minimum": 0.01
+        },
+        "objectClass": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "UNSET"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "GLOBAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "GLOBAL"
+              ]
+            },
+            {
+              "description": "A class of a module (`ModuleDefinition::classes`): only valid\ninside the module, each instance has its own.",
+              "type": "object",
+              "properties": {
+                "LOCAL": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "LOCAL"
+              ]
+            }
+          ],
+          "description": "Object class to track.",
+          "default": "UNSET"
+        },
+        "splitting": {
+          "description": "Detect one object splitting into two (e.g. cell division).",
+          "type": "boolean",
+          "default": false
+        }
+      }
     },
     "TrackSettings": {
       "type": "object",
@@ -10967,7 +13718,7 @@
       ]
     },
     "TransformObjectsSettings": {
-      "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\nThis command applies a geometric transform (scale, circle, fitted ellipse) to every object\ncarrying `input_class`. The transformed shape keeps the original object's bounding-box center.\nIf `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\notherwise a new object carrying `output_class` is created alongside the untouched input object.",
+      "description": "Transforms given ROIs and either replaces the old ones or creates new ones.\n\nThis command applies a geometric transform (scale, circle, fitted ellipse) to every object\ncarrying `input_class`. The transformed shape keeps the original object's bounding-box center.\nIf `output_class` is unset (or equal to `input_class`) the input object is replaced in place;\notherwise a new object carrying `output_class` is created alongside the untouched input object.\n\nA transformed shape with no pixels left (e.g. `Shrink` by more than the object's own\nsize) is not an object: no new object is created, and in place the input object is removed.",
       "type": "object",
       "properties": {
         "function": {
@@ -11334,6 +14085,48 @@
           ],
           "default": "SOFTMAX_CLASSES"
         },
+        "pieceSize": {
+          "description": "How large the pieces are that a large tile runs through the network\nin: smaller ones take less RAM, larger ones are faster.",
+          "oneOf": [
+            {
+              "description": "As large as the computer's RAM allows (2048, 1024 or 512) for a\nmodel seeing a limited neighbourhood - its result is the same\nwhatever the size, up to float rounding; 1024 on every computer for\na model normalizing by the whole image (InstanceNorm), whose result\nthe size changes a little.",
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "AUTO"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            {
+              "description": "The same pieces for every model on every computer.",
+              "type": "object",
+              "properties": {
+                "side": {
+                  "description": "Pixels per side of a piece.",
+                  "type": "integer",
+                  "format": "int32",
+                  "maximum": 4096,
+                  "minimum": 256
+                },
+                "type": {
+                  "type": "string",
+                  "const": "FIXED"
+                }
+              },
+              "required": [
+                "type",
+                "side"
+              ]
+            }
+          ],
+          "default": {
+            "type": "AUTO"
+          }
+        },
         "probabilityThreshold": {
           "description": "Probability above which a pixel is classified as foreground.",
           "type": "number",
@@ -11348,6 +14141,70 @@
           "minimum": 0,
           "description": "The class assigned to pixels whose predicted probability reaches\n`probability_threshold`. All other pixels are assigned `SegmentationClass::BACKGROUND`.",
           "default": 1
+        }
+      }
+    },
+    "VesselnessSettings": {
+      "description": "Highlights lines (fibres, neurites, vessels) of the given widths, so a\nthreshold segments them (Frangi vesselness).\n\n[Vesselness] -> [Threshold] -> [Connected Components] -> [Extract Objects] -> [Skeletonize Objects]\n\nThe result is 0..1: high in the middle of a line, low for the\nbackground, blobs and flat areas.",
+      "type": "object",
+      "properties": {
+        "blobSuppression": {
+          "description": "How strongly blobs are suppressed (Frangi's β): lower suppresses\nmore, so only clearly elongated structures stay.",
+          "type": "number",
+          "format": "float",
+          "default": 0.5,
+          "maximum": 5,
+          "minimum": 0.05
+        },
+        "maxWidth": {
+          "description": "The width of the widest lines to find.",
+          "type": "number",
+          "format": "float",
+          "default": 6,
+          "maximum": 1000,
+          "minimum": 0.5
+        },
+        "minWidth": {
+          "description": "The width of the thinnest lines to find.",
+          "type": "number",
+          "format": "float",
+          "default": 2,
+          "maximum": 1000,
+          "minimum": 0.5
+        },
+        "noiseLevel": {
+          "description": "Structures much weaker than this count as noise (Frangi's c, on the\nrelative 0..1 scale of the image's second derivatives). 0:\nautomatic - half the strongest structure in the image (on a whole\nslide: in each tile).",
+          "type": "number",
+          "format": "float",
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0
+        },
+        "polarity": {
+          "description": "Bright lines on a dark background (fluorescence) or dark lines on a\nbright one (brightfield).",
+          "type": "string",
+          "enum": [
+            "BRIGHT",
+            "DARK"
+          ],
+          "default": "BRIGHT"
+        },
+        "widthSteps": {
+          "description": "How many widths between the thinnest and the widest are tried\n(spaced evenly on a log scale). More: steadier response over the\nwidths, slower.",
+          "type": "integer",
+          "format": "uint",
+          "default": 3,
+          "maximum": 10,
+          "minimum": 1
+        },
+        "widthUnit": {
+          "type": "string",
+          "enum": [
+            "NANO_METER",
+            "PIXELS"
+          ],
+          "description": "Unit the widths are expressed in.",
+          "default": "PIXELS"
         }
       }
     },
