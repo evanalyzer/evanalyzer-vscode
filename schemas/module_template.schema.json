@@ -116,6 +116,66 @@
         }
       }
     },
+    "AiSegmentationInputNormalizationInputNormalizationSettings": {
+      "description": "How the image is scaled before an AI model sees it - computed over each\ntile (an image up to 4096 x 4096 px is one tile; on a whole slide every\ntile is scaled by its own pixels, so a tile of mostly background has its\nnoise stretched).",
+      "oneOf": [
+        {
+          "description": "What the model was trained with: StarDist the tile's 1st and 99.8th\npercentile, Cellpose its 1st and 99th, a U-Net what its model file\nsays (e.g. zero mean, unit variance).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MODEL_DEFAULT"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "These percentiles of the tile become 0 and 1.",
+          "type": "object",
+          "properties": {
+            "high": {
+              "description": "The percentile that becomes 1.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "low": {
+              "description": "The percentile that becomes 0.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "PERCENTILE"
+            }
+          },
+          "required": [
+            "type",
+            "low",
+            "high"
+          ]
+        },
+        {
+          "description": "The pixels as read (scaled by their bit depth to 0..1).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "OFF"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
     "AiSegmentationPieceSizePieceSizeSettings": {
       "description": "How large the pieces are that a large tile runs through a U-Net or\nStarDist network in (square; a tile up to a piece runs whole). Smaller\npieces take less RAM, larger ones are faster - a U-Net on a slide: 1024\n~2.6 GB at once, 2048 ~8.5 GB.",
       "oneOf": [
@@ -187,6 +247,33 @@
         "organization"
       ]
     },
+    "BandpassSettings": {
+      "description": "Removes details finer than `sigma_small` (noise) and structures coarser\nthan `sigma_large` (uneven background), keeps everything in between.\n\n[Bandpass] -> [Threshold | Find Maxima]\n\nThe result is in the image's intensity units around 0: bright objects\npositive, the removed background 0. With `sigma_large` 0 it is a plain\nblur, with `sigma_small` 0 a background subtraction.",
+      "type": "object",
+      "properties": {
+        "sigmaLarge": {
+          "description": "σ of the wider Gaussian, subtracted: structures coarser than about\nthis are removed (uneven background). Must be larger than\n`sigma_small`; 0: nothing removed.",
+          "type": "number",
+          "format": "float",
+          "default": 15.0,
+          "maximum": 10000,
+          "minimum": 0
+        },
+        "sigmaSmall": {
+          "description": "σ of the narrower Gaussian: details finer than about this are\nsmoothed away (noise). 0: no smoothing.",
+          "type": "number",
+          "format": "float",
+          "default": 1.0,
+          "maximum": 10000,
+          "minimum": 0
+        },
+        "unit": {
+          "description": "Unit both σ are expressed in.",
+          "$ref": "#/$defs/SizeUnits",
+          "default": "PIXELS"
+        }
+      }
+    },
     "BlurSettings": {
       "description": "Smooths an image by averaging pixel intensities within a local neighborhood.\n\nThis algorithm applies a uniform box filter where every pixel within the moving\nwindow contributes equally to the final value. It is a computationally fast\nmethod used for general image smoothing, blending variations, and rapid noise\nsuppression where edge precision is less critical.",
       "type": "object",
@@ -251,9 +338,16 @@
           "minimum": 0
         },
         "modelPath": {
-          "description": "Path to a TorchScript-exported Cellpose model (`torch.jit.script`/`torch.jit.trace`).",
+          "description": "The Cellpose-SAM model file (EVAnalyzer's `.evanet` or `.safetensors`, converted\nonce from Cellpose's own, e.g. `cpsam_v2`).",
           "type": "string",
           "default": ""
+        },
+        "normalization": {
+          "description": "How the image is scaled before the model sees it: by default the\ntile's 1st and 99th percentile become 0 and 1, as Cellpose does.",
+          "$ref": "#/$defs/AiSegmentationInputNormalizationInputNormalizationSettings",
+          "default": {
+            "type": "MODEL_DEFAULT"
+          }
         },
         "probabilityThreshold": {
           "description": "Cell probability above which a pixel takes part in the flow dynamics and\ncan be assigned to an object. The raw cell-probability logits are passed\nthrough a sigmoid first, so this is a probability in `[0, 1]` (Cellpose's\ndefault logit threshold of `0` corresponds to `0.5`).",
@@ -291,6 +385,11 @@
         },
         "notes": {
           "type": "string"
+        },
+        "results": {
+          "description": "What the results keep of the class's objects - missing in projects\nfrom before it: [`ClassResults::Objects`].",
+          "$ref": "#/$defs/ClassResults",
+          "default": "objects"
         }
       },
       "required": [
@@ -298,6 +397,21 @@
         "color",
         "name",
         "notes"
+      ]
+    },
+    "ClassResults": {
+      "description": "What the results keep of a class's objects. The pipeline and the viewer\nsee every class whatever it says.",
+      "oneOf": [
+        {
+          "description": "Every object with its measurements.",
+          "type": "string",
+          "const": "objects"
+        },
+        {
+          "description": "Only for later steps of the pipeline (e.g. the seeds of Grow\nRegions): nothing of the class is written to the results - an object\nin no other class isn't stored, nor its measurements.",
+          "type": "string",
+          "const": "intermediate"
+        }
       ]
     },
     "ClassificationMappingSettings": {
@@ -582,6 +696,17 @@
         "range"
       ]
     },
+    "ColorToGrayscaleSettings": {
+      "description": "Turns a colour (RGB) image into a gray image - e.g. before Threshold,\nwhich needs one value per pixel. A gray image passes through unchanged.\n\nFor stains (Hematoxylin, DAB, Eosin) use Color Deconvolution instead; for\none colour range, Color Filter.",
+      "type": "object",
+      "properties": {
+        "method": {
+          "description": "How the red, green and blue of a pixel become one gray value.",
+          "$ref": "#/$defs/FiltersColorToGrayscaleGrayscaleMethodSettings",
+          "default": "BRIGHTNESS"
+        }
+      }
+    },
     "ConnectedComponentsSettings": {
       "description": "Identifies and labels discrete objects within a binary or multi-class image.\n\n[Preprocessing] -> [Segment/Threshold] -> [Fill Holes] -> [Connected Components] -> [Watershed] -> [Extract Objects]",
       "type": "object",
@@ -592,6 +717,25 @@
           "format": "int32",
           "default": 0,
           "minimum": 1
+        }
+      }
+    },
+    "DifferenceOfGaussiansSettings": {
+      "description": "Enhances spots of one size with a band-pass: a slightly blurred minus a\nmore blurred copy of the image keeps the details of a spot's size and\nremoves finer noise and coarser background and structures.\n\n[Difference of Gaussians] -> [Find Maxima] -> [Extract Objects]\n\nBright spots become positive peaks, dark spots negative ones, flat\nbackground 0. Measure intensities on the original channel, not on this\nimage.",
+      "type": "object",
+      "properties": {
+        "sigma": {
+          "description": "The scale σ of the spots to enhance (the narrower Gaussian; the\nwider one is 1.6 σ); as a guide, σ ≈\nspot radius / √2 (1.4 for spots of 4 px). Smaller details count as\nnoise, larger ones as background.",
+          "type": "number",
+          "format": "float",
+          "default": 1.5,
+          "maximum": 1000,
+          "minimum": 0.1
+        },
+        "unit": {
+          "description": "Unit `sigma` is expressed in.",
+          "$ref": "#/$defs/SizeUnits",
+          "default": "PIXELS"
         }
       }
     },
@@ -913,6 +1057,46 @@
         }
       ]
     },
+    "FiltersColorToGrayscaleGrayscaleMethodSettings": {
+      "description": "How the red, green and blue of a pixel become one gray value.",
+      "oneOf": [
+        {
+          "description": "The brightness as the eye sees it: 0.2126 R + 0.7152 G + 0.0722 B\n(ITU-R BT.709).",
+          "type": "string",
+          "const": "BRIGHTNESS"
+        },
+        {
+          "description": "The red channel alone.",
+          "type": "string",
+          "const": "RED"
+        },
+        {
+          "description": "The green channel alone - often the best contrast in H&E.",
+          "type": "string",
+          "const": "GREEN"
+        },
+        {
+          "description": "The blue channel alone.",
+          "type": "string",
+          "const": "BLUE"
+        },
+        {
+          "description": "(R + G + B) / 3 - the gray value intensities of a colour image are\nmeasured with, as in ImageJ.",
+          "type": "string",
+          "const": "AVERAGE"
+        },
+        {
+          "description": "The brightest of R, G and B per pixel (HSV value, as Color Filter\nuses).",
+          "type": "string",
+          "const": "MAXIMUM"
+        },
+        {
+          "description": "1 − brightness: stained tissue bright on a dark background, as\nThreshold expects objects - for brightfield slides.",
+          "type": "string",
+          "const": "DARKNESS"
+        }
+      ]
+    },
     "FiltersHessianHessianModeSettings": {
       "description": "Specifies the feature extraction method for the Hessian matrix.\n\nThe Hessian matrix describes the local second-order structure of an image,\noften used for blob detection (LoG) or ridge extraction.",
       "oneOf": [
@@ -1133,14 +1317,46 @@
         "DARK"
       ]
     },
+    "FiltersWaveletSpotsWaveletNoiseSettings": {
+      "description": "How [`WaveletSpots`] estimates the noise of each level.",
+      "oneOf": [
+        {
+          "description": "From each level on its own, as in the paper. Where spots or other\nstructures fill much of the image, the coarser levels count them as\nnoise and their threshold rises.",
+          "type": "string",
+          "const": "PER_LEVEL"
+        },
+        {
+          "description": "From the finest level, which holds the least structure, scaled to\nthe other levels as Gaussian noise passes through the transform.\nSteadier with many spots or a structured background.",
+          "type": "string",
+          "const": "FINEST_LEVEL"
+        }
+      ]
+    },
+    "FiltersWaveletSpotsWaveletOutputSettings": {
+      "description": "The unit of [`WaveletSpots`]' result.",
+      "oneOf": [
+        {
+          "description": "The paper's product of the combined levels: intensity to the power\nof their number.",
+          "type": "string",
+          "const": "PRODUCT"
+        },
+        {
+          "description": "The geometric mean of the combined levels (the product's n-th root):\nthe same spots and maxima, in the image's units, so Find Maxima's\ncut-off and prominence don't change with the number of levels.",
+          "type": "string",
+          "const": "INTENSITY"
+        }
+      ]
+    },
     "FindMaximaSettings": {
-      "description": "Finds spots as local maxima: each pixel that is the brightest within the\nradius becomes one 1-pixel object.\n\n[Preprocessing (Gaussian Blur)] -> [Find Maxima] -> [Extract Objects] -> [Transform Objects (Draw Circle)]\n\nWrites the segmentation and the instance map (both replaced): the maxima\nget the segmentation class and one instance each; the image stays as it\nis. A plateau (equal neighbouring pixels) gives one maximum, its pixel\nnearest the plateau's centre; of equal maxima within the radius the one\nfound first (row order) is kept. Flat regions (a background of 0) are\nnever maxima.",
+      "description": "Finds spots as local maxima: each pixel that is the brightest within the\nradius becomes one 1-pixel object.\n\n[Laplacian of Gaussian | Difference of Gaussians | Wavelet Spots | Gaussian Blur] -> [Find Maxima] -> [Extract Objects] -> [Transform Objects (Draw Circle)]\n\nWrites the segmentation and the instance map (both replaced): the maxima\nget the segmentation class and one instance each; the image stays as it\nis. A plateau (equal neighbouring pixels) gives one maximum, its pixel\nnearest the plateau's centre; of equal maxima within the radius the one\nfound first (row order) is kept. Flat regions (a background of 0) are\nnever maxima.",
       "type": "object",
       "properties": {
         "cutoff": {
-          "description": "How the quality cut-off is chosen. A maximum's quality is the image's\nvalue at it.\n\nManual: maxima above `min_quality` are kept.\nOtsu: Otsu's method on the qualities of all maxima of the image\nsplits spots from noise peaks; `min_quality` stays the lowest cut-off,\nso an image without spots doesn't turn its noise into spots.",
+          "description": "How the quality cut-off is chosen. A maximum's quality is the image's\nvalue at it.\n\nManual: maxima above `min_quality` are kept.\nOtsu: Otsu's method on the qualities of all maxima of the image\nsplits spots from noise peaks.\nNoise: maxima more than `noise_factor` times the image's noise above\nits background are kept - the same factor fits every exposure.\n\nWith Otsu and Noise `min_quality` stays the lowest cut-off, so an\nimage without spots doesn't turn its noise into spots.",
           "$ref": "#/$defs/SegmentationFindMaximaMaximaCutoffSettings",
-          "default": "MANUAL"
+          "default": {
+            "type": "MANUAL"
+          }
         },
         "excludeAtEdges": {
           "description": "Drop maxima closer to the image border than the radius.",
@@ -1153,7 +1369,7 @@
           "default": false
         },
         "minQuality": {
-          "description": "Maxima with a quality at or below this value are dropped (with Otsu:\nthe lowest cut-off).",
+          "description": "Maxima with a quality at or below this value are dropped (with Otsu\nand Noise: the lowest cut-off).",
           "type": "number",
           "format": "float",
           "default": 0.0,
@@ -1204,6 +1420,82 @@
           "default": 0.3400000035762787,
           "maximum": 8,
           "minimum": 0.1
+        }
+      }
+    },
+    "GrowRegionsSettings": {
+      "description": "Grows a region from each seed object through an image, like a magic\nwand: e.g. a spot's outline from its maximum, or a nucleus from a point\ninside it.\n\n[Find Maxima] -> [Extract Objects] -> [Grow Regions]\n\nEvery seed gets its own stop level (relative to its own peak and\nbackground, so dim and bright objects keep the same shape); touching\nregions are split on the darkest line between them, may overlap, or are\nmerged. Each region keeps its seed's pixels; Relate Objects links it to\nits seed. Seeds 1024 px across or more (a tissue-sized object) don't\ngrow: their region is the seed.",
+      "type": "object",
+      "properties": {
+        "distanceUnit": {
+          "description": "Unit of `max_distance`.",
+          "$ref": "#/$defs/SizeUnits",
+          "default": "PIXELS"
+        },
+        "excludeAtEdges": {
+          "description": "Discard regions that touch the image border.",
+          "type": "boolean",
+          "default": false
+        },
+        "growthChannel": {
+          "description": "The image the regions grow through: the pipeline's image at this\nstep (e.g. after a background subtraction), an image channel (the raw\nspot or nucleus stain) or a memory slot.",
+          "$ref": "#/$defs/ObjectGrowRegionsGrowChannelSettings",
+          "default": "PIPELINE_STEP"
+        },
+        "mask": {
+          "description": "Regions only grow into pixels of objects carrying this class (e.g.\nthe thresholded cells). `Unset`: everywhere.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "maxDistance": {
+          "description": "How far a region reaches at most from its seed (from the nearest\nseed pixel). Also where the background is measured: a little more\nthan the largest object's radius.",
+          "type": "number",
+          "format": "float",
+          "default": 10.0,
+          "maximum": 1000,
+          "minimum": 1
+        },
+        "objectsAre": {
+          "description": "Bright: objects brighter than their background (fluorescence).\nDark: objects darker than their background (brightfield, stains) -\neverything below then counts the other way round.",
+          "$ref": "#/$defs/ObjectGrowRegionsPolaritySettings",
+          "default": "BRIGHT"
+        },
+        "order": {
+          "description": "Which neighbouring pixel joins a region next.\n\nIntensity: the brightest - a region spreads downhill from its peak.\nFor objects with a bright centre that fades out (spots, blobs).\nSimilarity: the one closest to the seed's value (the median of the\nseed's pixels) - a region covers what looks like its seed. For evenly\nbright objects (nuclei, organelles); larger seeds give a steadier\nvalue than a single pixel.",
+          "$ref": "#/$defs/ObjectGrowRegionsGrowthOrderSettings",
+          "default": "INTENSITY"
+        },
+        "outputClass": {
+          "description": "The class the grown regions get.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "seeds": {
+          "description": "Objects carrying this class are the seeds (e.g. the maxima of Find\nMaxima after Extract Objects, or nuclei): each grows into one region.",
+          "$ref": "#/$defs/ObjectClass",
+          "default": "UNSET"
+        },
+        "smoothing": {
+          "description": "Smooths the growth channel before growing (noisy images): the\ngrowth order, stop level, background and noise then come from the\nsmoothed pixels. The regions' intensities are still measured on the\nraw channel.",
+          "$ref": "#/$defs/ObjectGrowRegionsSmoothingSettings",
+          "default": {
+            "type": "NONE"
+          }
+        },
+        "stop": {
+          "description": "Which pixels may join a region (the seed's own pixels always\nbelong to it).\n\nRelative, Noise: the background is the median of the pixels just\nbeyond `max_distance` around the seed (2 px wide ring), the noise\ntheir median absolute deviation × 1.4826.",
+          "$ref": "#/$defs/ObjectGrowRegionsStopRuleSettings",
+          "default": {
+            "fraction": 0.5,
+            "type": "RELATIVE"
+          }
+        },
+        "whenRegionsMeet": {
+          "description": "What happens where regions of different seeds meet.",
+          "$ref": "#/$defs/ObjectGrowRegionsMeetingSettings",
+          "default": {
+            "type": "SEPARATE"
+          }
         }
       }
     },
@@ -1456,6 +1748,25 @@
         "brightness"
       ]
     },
+    "LaplacianOfGaussianSettings": {
+      "description": "Enhances spots of one size: keeps the details of a spot's size and\nremoves finer noise and coarser background and structures.\n\n[Laplacian of Gaussian] -> [Find Maxima] -> [Extract Objects]\n\nBright spots become positive peaks, dark spots negative ones, flat and\nevenly sloped background 0. Measure intensities on the original channel,\nnot on this image.",
+      "type": "object",
+      "properties": {
+        "sigma": {
+          "description": "The scale σ of the spots to enhance (Lindeberg's `t = σ²`). A\nGaussian spot of standard deviation σ responds most; as a guide, σ ≈\nspot radius / √2 (1.4 for spots of 4 px). Smaller details count as\nnoise, larger ones as background.",
+          "type": "number",
+          "format": "float",
+          "default": 1.5,
+          "maximum": 1000,
+          "minimum": 0.1
+        },
+        "unit": {
+          "description": "Unit `sigma` is expressed in.",
+          "$ref": "#/$defs/SizeUnits",
+          "default": "PIXELS"
+        }
+      }
+    },
     "LaplacianSettings": {
       "description": "Configuration for the Laplacian edge detection filter.\n\nThe Laplacian is a second-order derivative operator used to find regions of\nrapid intensity change. It is particularly effective for detecting edges\nand fine details, though it is highly sensitive to noise.",
       "type": "object",
@@ -1640,6 +1951,519 @@
         "IMAGE",
         "INSTANCE_MAP",
         "SEGMENTATION_MASK"
+      ]
+    },
+    "MathSubtractReferenceChannelAlignmentSettings": {
+      "description": "How the reference is shifted onto the target.",
+      "oneOf": [
+        {
+          "description": "Estimated per image (phase correlation).",
+          "type": "object",
+          "properties": {
+            "fallbackDx": {
+              "description": "Shift right (+) used when the estimate isn't believed (px).",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": -100
+            },
+            "fallbackDy": {
+              "description": "Shift down (+) used when the estimate isn't believed (px).",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": -100
+            },
+            "maxShift": {
+              "description": "Larger shifts (px) are not believed: the fallback is used.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "minQuality": {
+              "description": "Below this quality (0 - 1) the fallback is used.",
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "AUTO"
+            }
+          },
+          "required": [
+            "type",
+            "maxShift",
+            "minQuality",
+            "fallbackDx",
+            "fallbackDy"
+          ]
+        },
+        {
+          "description": "A fixed shift of the reference.",
+          "type": "object",
+          "properties": {
+            "dx": {
+              "description": "Shift right (+) or left (−) in pixels.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": -100
+            },
+            "dy": {
+              "description": "Shift down (+) or up (−) in pixels.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": -100
+            },
+            "type": {
+              "type": "string",
+              "const": "FIXED"
+            }
+          },
+          "required": [
+            "type",
+            "dx",
+            "dy"
+          ]
+        },
+        {
+          "description": "Not shifted.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "NONE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelBackgroundSettings": {
+      "description": "The background removed from both channels.",
+      "oneOf": [
+        {
+          "description": "The median over a circle (as Median Subtract).",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius (px): a little larger than the structures.",
+              "type": "number",
+              "format": "float",
+              "maximum": 200,
+              "minimum": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "MEDIAN"
+            }
+          },
+          "required": [
+            "type",
+            "radius"
+          ]
+        },
+        {
+          "description": "Rolling Ball.",
+          "type": "object",
+          "properties": {
+            "radius": {
+              "description": "Radius of the ball (px).",
+              "type": "number",
+              "format": "float",
+              "maximum": 200,
+              "minimum": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "ROLLING_BALL"
+            }
+          },
+          "required": [
+            "type",
+            "radius"
+          ]
+        },
+        {
+          "description": "No background removed.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "NONE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelCameraOffsetSettings": {
+      "description": "The camera's offset (its black level).",
+      "oneOf": [
+        {
+          "description": "No offset subtracted.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "NONE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Fixed offsets per channel.",
+          "type": "object",
+          "properties": {
+            "reference": {
+              "description": "Offset of the reference.",
+              "type": "number",
+              "format": "float",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "target": {
+              "description": "Offset of the target.",
+              "type": "number",
+              "format": "float",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "MANUAL"
+            }
+          },
+          "required": [
+            "type",
+            "target",
+            "reference"
+          ]
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelEstimationScopeSettings": {
+      "description": "The area the shift and factor are estimated over.",
+      "oneOf": [
+        {
+          "description": "The whole image - per tile for now on an image larger than 4096 px\n(logged).",
+          "type": "string",
+          "const": "IMAGE"
+        },
+        {
+          "description": "Each tile on its own.",
+          "type": "string",
+          "const": "TILE"
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelFactorSettings": {
+      "description": "How the scale factor `a` is set.",
+      "oneOf": [
+        {
+          "description": "Fitted per image: a robust line through the structure's pixels\n(reference above its noise), pixels bright in only one channel left\nout - EVs in the target as well as dots in the reference only (e.g.\ndye aggregates). The fit is used when it is precise (see Max\nUncertainty). A precise factor of about 0 is a result too (the\ntarget shows nothing of the reference, e.g. a field without serum):\na negative one is set to 0.",
+          "type": "object",
+          "properties": {
+            "fallback": {
+              "description": "The factor used when the fit fails (0 = subtract nothing).",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000,
+              "minimum": 0
+            },
+            "fitOffset": {
+              "description": "Fit the offset `b` too; otherwise the line goes through 0.",
+              "type": "boolean"
+            },
+            "maxUncertainty": {
+              "description": "The fit is used when its uncertainty moves the subtracted signal\nat the reference's bright pixels (99th percentile of the fit\npixels) by less than this many times the noise; otherwise the\nfallback. Unlike R² it accepts a precise factor of about 0\n(nothing of the reference in the target). Real images: 0.01 -\n0.05.",
+              "type": "number",
+              "format": "float",
+              "maximum": 10,
+              "minimum": 0.01
+            },
+            "maxValue": {
+              "description": "A fitted factor above this uses the fallback.",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000,
+              "minimum": 0
+            },
+            "minPercentile": {
+              "description": "Fit pixels: reference also above this percentile.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "minValue": {
+              "description": "A fitted factor below this uses the fallback.",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000,
+              "minimum": 0
+            },
+            "noiseFactor": {
+              "description": "Fit pixels: reference above its median + this × its noise.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "outlierK": {
+              "description": "Pixels this many times the noise above the line (EVs) or below\nit (dots in the reference only) are left out.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0.5
+            },
+            "type": {
+              "type": "string",
+              "const": "ROBUST_FIT"
+            }
+          },
+          "required": [
+            "type",
+            "noiseFactor",
+            "minPercentile",
+            "outlierK",
+            "fitOffset",
+            "maxUncertainty",
+            "fallback",
+            "minValue",
+            "maxValue"
+          ]
+        },
+        {
+          "description": "A fixed factor (e.g. measured on single-stain controls).",
+          "type": "object",
+          "properties": {
+            "factor": {
+              "description": "The factor `a`. (Not named `value`: the generated settings code\nhas a parameter of that name.)",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "FIXED"
+            }
+          },
+          "required": [
+            "type",
+            "factor"
+          ]
+        },
+        {
+          "description": "From the exposure times: `a = calibration · t_target / t_reference`.",
+          "type": "object",
+          "properties": {
+            "calibration": {
+              "description": "The factor at equal exposure times.",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000,
+              "minimum": 0
+            },
+            "exposureReferenceMs": {
+              "description": "Exposure time of the reference (ms).",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000000,
+              "minimum": 0.001
+            },
+            "exposureTargetMs": {
+              "description": "Exposure time of the target (ms).",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000000,
+              "minimum": 0.001
+            },
+            "type": {
+              "type": "string",
+              "const": "EXPOSURE_RATIO"
+            }
+          },
+          "required": [
+            "type",
+            "calibration",
+            "exposureTargetMs",
+            "exposureReferenceMs"
+          ]
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelOutputImageSettings": {
+      "description": "What [`SubtractReferenceChannel`] puts out.",
+      "oneOf": [
+        {
+          "description": "The target without the reference's signal.",
+          "type": "string",
+          "const": "RESIDUAL"
+        },
+        {
+          "description": "The scaled, aligned reference `a · align(T) + b` (to inspect the\nestimate).",
+          "type": "string",
+          "const": "SCALED_REFERENCE"
+        },
+        {
+          "description": "The residual in units of its local noise: the deviation from its\nlocal baseline (median over 21 × 21 px) over the spread of the\ndeviations there, from the negative side only (noise is symmetric,\nEVs only add light - so they don't raise their own noise). The noise\nis higher where the image is brighter (photon noise) and where the\nsubtraction leaves leftovers of the structure; both raise it, so 5\nmeans five times the noise right there - the same on the structure,\non a bright sheet and on dark background. For spot detection (a\nthreshold, Wavelet Spots) where leftovers or bright regions would\ncount as spots.",
+          "type": "string",
+          "const": "SIGNIFICANCE"
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelSaturationSettings": {
+      "description": "The level from which a pixel counts as saturated.",
+      "oneOf": [
+        {
+          "description": "The image's largest gray value (255 for 8 bit, 4095 for 12 bit,\n65535 for 16 bit, …). None for float images.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "AUTO"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A fixed level.",
+          "type": "object",
+          "properties": {
+            "level": {
+              "description": "Pixels at or above this gray value are saturated (camera counts,\ne.g. 4000 of a 12-bit camera's 4095; on float images as stored).",
+              "type": "number",
+              "format": "float",
+              "maximum": 1000000000,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "MANUAL"
+            }
+          },
+          "required": [
+            "type",
+            "level"
+          ]
+        },
+        {
+          "description": "No pixel is left out.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "OFF"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelSharpnessSettings": {
+      "description": "How [`SubtractReferenceChannel`] matches the sharpness of target and\nreference.",
+      "oneOf": [
+        {
+          "description": "The extra blurs set by hand (Target / Reference Extra Sigma).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MANUAL"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Estimated per image, after the alignment: how much blurrier one\nchannel is than the other (their cross-spectrum over the\nreference's spectrum, see `libs::blur_matching`), and the sharper\none blurred by the difference - for channels whose focus differs\nfrom image to image. Without an estimate (too little structure in\nthe target) the extra blurs set by hand are used. With Factor Robust\nFit the estimate is used only where the factor fits at least as\nwell (R²) as with the blurs set by hand: structures of different\ncolour ratio at different scales (e.g. coarse serum and fine beads)\ncan read as a blur difference.",
+          "type": "object",
+          "properties": {
+            "maxSigma": {
+              "description": "Larger differences (σ, px) are not believed: the extra blurs set\nby hand are used.",
+              "type": "number",
+              "format": "float",
+              "maximum": 20,
+              "minimum": 0.5
+            },
+            "type": {
+              "type": "string",
+              "const": "AUTO"
+            }
+          },
+          "required": [
+            "type",
+            "maxSigma"
+          ]
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelShiftInterpolationSettings": {
+      "description": "How [`SubtractReferenceChannel`] interpolates the shifted reference.",
+      "oneOf": [
+        {
+          "description": "Bicubic (Keys, a = −0.5).",
+          "type": "string",
+          "const": "CUBIC"
+        },
+        {
+          "description": "Bilinear: a little smoother.",
+          "type": "string",
+          "const": "LINEAR"
+        }
+      ]
+    },
+    "MathSubtractReferenceChannelTargetSourceSettings": {
+      "description": "The image [`SubtractReferenceChannel`] corrects.",
+      "oneOf": [
+        {
+          "description": "The pipeline's image at this step.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CURRENT_IMAGE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "An image channel as it was read.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "description": "The channel to correct.",
+              "$ref": "#/$defs/ImageChannelIdx"
+            },
+            "type": {
+              "type": "string",
+              "const": "CHANNEL"
+            }
+          },
+          "required": [
+            "type",
+            "channel"
+          ]
+        }
       ]
     },
     "MeasureColocalizationCostesMethodSettings": {
@@ -2421,34 +3245,28 @@
       ]
     },
     "MorphologicalCommandSettings": {
-      "description": "A filter that applies mathematical morphology to an image.\n\nMorphological operations use a structuring element (kernel) to probe\nand modify the shapes within an image.",
+      "description": "A filter that applies mathematical morphology to an image.\n\nMorphological operations use a structuring element (kernel) to probe\nand modify the shapes within an image.\n\nIts place in the pipeline decides what it works on: before a\nsegmentation on the image, after one (e.g. a Threshold) on the\nsegmentation mask - every class transformed as its own mask: classes grow\ninto background only (Dilate) and touching classes shrink away from each\nother equally (Erode), whatever their class numbers.",
       "type": "object",
       "properties": {
         "kernelShape": {
           "description": "The geometric profile of the structuring element.",
-          "$ref": "#/$defs/MorphologyMorphologicalTransformationKernelShapesSettings"
+          "$ref": "#/$defs/MorphologyMorphologicalTransformationKernelShapesSettings",
+          "default": "BOX"
         },
         "kernelSize": {
-          "description": "The diameter of the structuring element in pixels.\nMust be an odd number (e.g., 3, 5, 7).",
+          "description": "The diameter of the structuring element in pixels.\nMust be an odd number (e.g., 3, 5, 7), so the kernel has a centre\npixel and is symmetric - an even size would shift objects.",
           "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "default": 3,
+          "maximum": 101,
+          "minimum": 3
         },
         "op": {
           "description": "The transformation type (e.g., Dilate, Erode).",
-          "$ref": "#/$defs/MorphologyMorphologicalTransformationMorphOpsSettings"
-        },
-        "useGrayscale": {
-          "description": "If set the grayscale image instead of the labeld image is taken to perform a morphological transform",
-          "type": "boolean"
+          "$ref": "#/$defs/MorphologyMorphologicalTransformationMorphOpsSettings",
+          "default": "DILATE"
         }
-      },
-      "required": [
-        "op",
-        "kernelSize",
-        "kernelShape",
-        "useGrayscale"
-      ]
+      }
     },
     "MorphologyMorphologicalTransformationKernelShapesSettings": {
       "description": "The geometric structure of the kernel (structuring element).",
@@ -2624,6 +3442,267 @@
           "additionalProperties": false,
           "required": [
             "MULTI_FOR"
+          ]
+        }
+      ]
+    },
+    "ObjectGrowRegionsGrowChannelSettings": {
+      "description": "The image [`GrowRegions`] grows its regions through.",
+      "oneOf": [
+        {
+          "description": "The pipeline's image as it is at this step.",
+          "type": "string",
+          "const": "PIPELINE_STEP"
+        },
+        {
+          "description": "An image channel as it was read.",
+          "type": "object",
+          "properties": {
+            "IMAGE_CHANNEL": {
+              "$ref": "#/$defs/ImageChannelIdx"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "IMAGE_CHANNEL"
+          ]
+        },
+        {
+          "description": "A memory slot as it is at this step (stored by Image Cache).",
+          "type": "object",
+          "properties": {
+            "MEMORY": {
+              "$ref": "#/$defs/MemoryId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "MEMORY"
+          ]
+        }
+      ]
+    },
+    "ObjectGrowRegionsGrowthOrderSettings": {
+      "description": "Which neighbouring pixel joins a [`GrowRegions`] region next.",
+      "oneOf": [
+        {
+          "description": "The brightest: a region spreads downhill from its peak (spots,\nblobs).",
+          "type": "string",
+          "const": "INTENSITY"
+        },
+        {
+          "description": "The one closest to the seed's value: a region covers what looks like\nits seed (evenly bright objects).",
+          "type": "string",
+          "const": "SIMILARITY"
+        }
+      ]
+    },
+    "ObjectGrowRegionsMeetingSettings": {
+      "description": "What [`GrowRegions`] does where regions of different seeds meet.",
+      "oneOf": [
+        {
+          "description": "Each pixel goes to one region: the border lies on the darkest line\nbetween them (touching spots counted apart).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "SEPARATE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Every region grows as if it were alone: a pixel may belong to\nseveral (e.g. each spot's whole halo) - a region may then take in a\nneighbouring spot if the valley between them stays above its stop\nlevel.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "OVERLAP"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Regions that meet over a shallow valley become one object (several\nmaxima on one object); regions with a deep valley between them stay\napart.",
+          "type": "object",
+          "properties": {
+            "maxValley": {
+              "description": "The deepest valley merged, as a part of the dimmer region's\ncontrast (peak - background): 0.2 merges regions whose border\nlies at most 20 % below the dimmer peak. Two objects only\ntouching at their stop level never merge below 1 - the stop\nfraction.",
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "MERGE"
+            }
+          },
+          "required": [
+            "type",
+            "maxValley"
+          ]
+        }
+      ]
+    },
+    "ObjectGrowRegionsPolaritySettings": {
+      "description": "Whether [`GrowRegions`]' objects are brighter or darker than their\nbackground.",
+      "oneOf": [
+        {
+          "description": "Brighter than the background (fluorescence).",
+          "type": "string",
+          "const": "BRIGHT"
+        },
+        {
+          "description": "Darker than the background (brightfield, stains).",
+          "type": "string",
+          "const": "DARK"
+        }
+      ]
+    },
+    "ObjectGrowRegionsSmoothingSettings": {
+      "description": "How [`GrowRegions`] smooths its growth channel before growing.",
+      "oneOf": [
+        {
+          "description": "The raw channel.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "NONE"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A Gaussian of standard deviation `sigma`: noise smaller than σ no\nlonger stops or splits a region. As a guide, σ ≈ 1 - 2 px for noisy\nspots, at most about a quarter of the smallest object's radius\n(larger blurs the regions' outlines).",
+          "type": "object",
+          "properties": {
+            "sigma": {
+              "description": "The standard deviation of the Gaussian.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0.1
+            },
+            "type": {
+              "type": "string",
+              "const": "GAUSSIAN"
+            },
+            "unit": {
+              "description": "Unit of `sigma`.",
+              "$ref": "#/$defs/SizeUnits"
+            }
+          },
+          "required": [
+            "type",
+            "sigma",
+            "unit"
+          ]
+        }
+      ]
+    },
+    "ObjectGrowRegionsStopRuleSettings": {
+      "description": "Which pixels may join a [`GrowRegions`] region. \"Brighter\"/\"above\"\ncount the other way round for dark objects.",
+      "oneOf": [
+        {
+          "description": "A level between the background (0) and the seed (1): 0.5 cuts each\nregion at half its height (full width at half maximum), so dim and\nbright objects keep the same shape. Intensity: pixels above the\nlevel, measured from the region's peak (the brightest pixel the seed\nreaches without going down). Similarity: pixels closer to\nthe seed's value than (1 - fraction) of its contrast, on either side.\nA seed not above its background grows nothing.",
+          "type": "object",
+          "properties": {
+            "fraction": {
+              "description": "The level between the background (0) and the seed (1).",
+              "type": "number",
+              "format": "float",
+              "maximum": 1,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "RELATIVE"
+            }
+          },
+          "required": [
+            "type",
+            "fraction"
+          ]
+        },
+        {
+          "description": "The classic magic wand. Intensity: pixels at most `tolerance` below\nthe region's peak. Similarity: pixels at most `tolerance` from the\nseed's value, on either side.",
+          "type": "object",
+          "properties": {
+            "tolerance": {
+              "description": "How far a pixel may lie from the peak or seed value.",
+              "type": "number",
+              "format": "float",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "TOLERANCE"
+            },
+            "unit": {
+              "description": "Unit of `tolerance` (bit: 0 - 255/65535, %: 0 - 100, rel: 0 - 1).",
+              "$ref": "#/$defs/PixelUnits"
+            }
+          },
+          "required": [
+            "type",
+            "tolerance",
+            "unit"
+          ]
+        },
+        {
+          "description": "Pixels above one fixed level, the same for every seed.",
+          "type": "object",
+          "properties": {
+            "level": {
+              "description": "The level a pixel must lie above.",
+              "type": "number",
+              "format": "float",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "THRESHOLD"
+            },
+            "unit": {
+              "description": "Unit of `level` (bit: 0 - 255/65535, %: 0 - 100, rel: 0 - 1).",
+              "$ref": "#/$defs/PixelUnits"
+            }
+          },
+          "required": [
+            "type",
+            "level",
+            "unit"
+          ]
+        },
+        {
+          "description": "Pixels more than `noise_factor` times the noise above the\nbackground: a region covers what stands out from the noise around\nit - the same factor fits every exposure.",
+          "type": "object",
+          "properties": {
+            "noiseFactor": {
+              "description": "How many times the noise a pixel must lie above the background.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "NOISE"
+            }
+          },
+          "required": [
+            "type",
+            "noiseFactor"
           ]
         }
       ]
@@ -3006,6 +4085,19 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "BANDPASS"
+            }
+          },
+          "$ref": "#/$defs/BandpassSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "BLUR"
             }
           },
@@ -3084,10 +4176,36 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "COLOR_TO_GRAYSCALE"
+            }
+          },
+          "$ref": "#/$defs/ColorToGrayscaleSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "CONNECTED_COMPONENTS"
             }
           },
           "$ref": "#/$defs/ConnectedComponentsSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "DIFFERENCE_OF_GAUSSIANS"
+            }
+          },
+          "$ref": "#/$defs/DifferenceOfGaussiansSettings",
           "required": [
             "type"
           ]
@@ -3227,6 +4345,19 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "GROW_REGIONS"
+            }
+          },
+          "$ref": "#/$defs/GrowRegionsSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "HESSIAN"
             }
           },
@@ -3296,6 +4427,19 @@
             }
           },
           "$ref": "#/$defs/LaplacianSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "LAPLACIAN_OF_GAUSSIAN"
+            }
+          },
+          "$ref": "#/$defs/LaplacianOfGaussianSettings",
           "required": [
             "type"
           ]
@@ -3682,6 +4826,19 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "SUBTRACT_REFERENCE_CHANNEL"
+            }
+          },
+          "$ref": "#/$defs/SubtractReferenceChannelSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "THRESHOLD"
             }
           },
@@ -3773,6 +4930,19 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "TRANSLATE_IMAGE"
+            }
+          },
+          "$ref": "#/$defs/TranslateImageSettings",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "U_NET"
             }
           },
@@ -3825,10 +4995,10 @@
           "properties": {
             "type": {
               "type": "string",
-              "const": "WEIGHTED_DEVIATION"
+              "const": "WAVELET_SPOTS"
             }
           },
-          "$ref": "#/$defs/WeightedDeviationSettings",
+          "$ref": "#/$defs/WaveletSpotsSettings",
           "required": [
             "type"
           ]
@@ -3838,10 +5008,10 @@
           "properties": {
             "type": {
               "type": "string",
-              "const": "YOLOV5"
+              "const": "WEIGHTED_DEVIATION"
             }
           },
-          "$ref": "#/$defs/Yolov5Settings",
+          "$ref": "#/$defs/WeightedDeviationSettings",
           "required": [
             "type"
           ]
@@ -4040,26 +5210,10 @@
       "description": "A command that exports the current image to a persistent file on disk.\n\nThis is a **transparent command**: it does not modify the image data in the\npipeline context, nor does it perform a buffer swap. It acts as a tap\nto view the state of the image at a specific point in the pipeline.",
       "type": "object",
       "properties": {
-        "displayClasses": {
-          "description": "Shows the selected classes in the image",
-          "type": "array",
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ObjectClass"
-          }
-        },
         "name": {
           "description": "Name the image should be stord under",
           "type": "string",
           "default": ""
-        },
-        "opacity": {
-          "description": "Opacity in percent of the filled `display_classes` objects (0 = only\nthe contours, 100 = solid). Contours are always drawn opaque.",
-          "type": "integer",
-          "format": "uint32",
-          "default": 50,
-          "maximum": 100,
-          "minimum": 0
         },
         "source": {
           "description": "Which image from the pipeline should be stored",
@@ -4102,10 +5256,54 @@
     },
     "SegmentationFindMaximaMaximaCutoffSettings": {
       "description": "How [`FindMaxima`] chooses its quality cut-off.",
-      "type": "string",
-      "enum": [
-        "MANUAL",
-        "OTSU"
+      "oneOf": [
+        {
+          "description": "Maxima above `min_quality` are kept.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MANUAL"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Otsu's method on the qualities of all maxima splits spots from noise\npeaks.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "OTSU"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Maxima more than `noise_factor` times the noise above the background\nare kept. Background: the median of all pixels; noise: their median\nabsolute deviation × 1.4826 (the standard deviation for normally\ndistributed noise). Both from the image this step gets, so after a\nblur the blurred noise counts. Spots must cover less than half the\nimage (else they raise the background).",
+          "type": "object",
+          "properties": {
+            "noiseFactor": {
+              "description": "How many times the noise a maximum must lie above the\nbackground: 3 keeps few noise peaks, 5 hardly any; lower finds\nfainter spots and more noise.",
+              "type": "number",
+              "format": "float",
+              "maximum": 100,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "NOISE"
+            }
+          },
+          "required": [
+            "type",
+            "noiseFactor"
+          ]
+        }
       ]
     },
     "SegmentationMappingSettings": {
@@ -4525,12 +5723,52 @@
         }
       }
     },
+    "SpartialTransformTranslateImageInterpolationSettings": {
+      "description": "How [`TranslateImage`] computes the values between pixels.",
+      "oneOf": [
+        {
+          "description": "The nearest pixel (the only choice for label images).",
+          "type": "string",
+          "const": "NEAREST"
+        },
+        {
+          "description": "Bilinear, from the 4 nearest pixels.",
+          "type": "string",
+          "const": "LINEAR"
+        },
+        {
+          "description": "Bicubic, from the 16 nearest pixels (Keys, a = −0.5): sharper than\nLinear, may over- and undershoot at edges.",
+          "type": "string",
+          "const": "CUBIC"
+        }
+      ]
+    },
+    "SpartialTransformTranslateImagePaddingSettings": {
+      "description": "What fills the strip [`TranslateImage`] empties at the image edge.",
+      "oneOf": [
+        {
+          "description": "The edge pixel repeated.",
+          "type": "string",
+          "const": "REPLICATE"
+        },
+        {
+          "description": "Mirrored at the edge, without repeating the edge pixel\n(…, 2, 1, 0, 1, 2, …).",
+          "type": "string",
+          "const": "REFLECT"
+        },
+        {
+          "description": "A fixed value (`pad_value`).",
+          "type": "string",
+          "const": "CONSTANT"
+        }
+      ]
+    },
     "StardistSettings": {
-      "description": "Instance segmentation using a pretrained StarDist model exported as TorchScript.\n\nThe model is expected to accept a `[1, 1, H, W]` float tensor (single-channel,\nsame normalization as the rest of the pipeline) and return two tensors:\nan object-probability map `[1, 1, H', W']` and a ray-distance map\n`[1, n_rays, H', W']` giving, for each grid cell, the distance to the object\nboundary along `n_rays` equally-spaced angles (the StarDist star-convex-polygon\nrepresentation). `H'`/`W'` may be smaller than the input size if the model\npredicts on a coarser grid; this is detected from the output shape and the\npolygons are rescaled back to image resolution automatically.\n\nSome TorchScript exports concatenate both outputs into a single\n`[1, 1 + n_rays, H', W']` tensor (channel 0 = probability, the rest =\ndistances); this is also supported.\n\nPer grid cell candidates above `probability_threshold` are converted to\nstar-convex polygons, then greedily filtered with non-maximum suppression\n(polygons whose pixel-overlap ratio with a higher-scoring candidate exceeds\n`nms_threshold` are discarded) before being rasterized into the pipeline's\nsegmentation and instance maps. Runs on GPU automatically if CUDA is\navailable in the linked libtorch build, otherwise falls back to CPU.",
+      "description": "Instance segmentation with a pretrained StarDist 2D model, from an\nEVAnalyzer model file (`.evanet`, converted once from StarDist's own,\ne.g. `2D_versatile_fluo` - `crates/nn`).\n\nFor each grid cell the model gives the probability of an object's centre\nand the distances to its boundary along `n_rays` equally spaced angles\n(StarDist's star-convex polygons). On a grid coarser than the pixels the\npolygons are scaled back to the image.\n\nPer grid cell candidates above `probability_threshold` are converted to\nstar-convex polygons, then greedily filtered with non-maximum suppression\n(polygons whose pixel-overlap ratio with a higher-scoring candidate exceeds\n`nms_threshold` are discarded) before being rasterized into the pipeline's\nsegmentation and instance maps. Runs on a GPU when there is one\n(convolutions in half precision there), else on the CPU.",
       "type": "object",
       "properties": {
         "modelPath": {
-          "description": "Path to a TorchScript-exported StarDist model (`torch.jit.script`/`torch.jit.trace`).",
+          "description": "The StarDist model file (EVAnalyzer's `.evanet` or `.safetensors`).",
           "type": "string",
           "default": ""
         },
@@ -4541,6 +5779,13 @@
           "default": 0.30000001192092896,
           "maximum": 1,
           "minimum": 0
+        },
+        "normalization": {
+          "description": "How the image is scaled before the model sees it: by default the\ntile's 1st and 99.8th percentile become 0 and 1, as StarDist's\nmodels were trained.",
+          "$ref": "#/$defs/AiSegmentationInputNormalizationInputNormalizationSettings",
+          "default": {
+            "type": "MODEL_DEFAULT"
+          }
         },
         "pieceSize": {
           "description": "How large the pieces are that a large tile runs through the network\nin: smaller ones take less RAM, larger ones are faster.",
@@ -4596,6 +5841,149 @@
         "sigma"
       ]
     },
+    "SubtractReferenceChannelSettings": {
+      "description": "Removes a signal from the image with a channel that shows only that\nsignal (the reference) - e.g. serum filaments or autofluorescence in an\nEV spot channel: `residual = S − (a · align(T) + b)`. The scale `a`, the\noffset `b` and the shift are set by hand or estimated from the image.\nTypically the first step of a pipeline, before the spot detection.\n\n**Order:** camera offset → background (both channels) → alignment (the\nreference shifted onto the target - before the fit: a wrong shift gives\na wrong `a` and leaves a relief) → extra blur of the sharper channel (set\nby hand or estimated per image, see [`Sharpness`]) →\nthe same smoothing of both (unsmoothed, noise in the reference biases\n`a` low) → factor → subtraction (by default only where the reference is\nbrighter than its background).\n\n**Assumption:** estimating the factor from the image assumes the target's\nown signal is not correlated with the reference. If it binds the\nreference structure (e.g. a protein on the filaments), use a Fixed\nfactor measured on single-stain controls.\n\n**Reading the residual:** a relief (bright on one side, dark on the\nother) → alignment. A bright centre line with dark sides → raise the\ntarget's extra blur; a dark centre line with bright sides → raise the\nreference's. The whole structure too bright or too dark → Factor scale.\n\n**Spot detection afterwards:** leftovers of the structure that one\nfactor can't remove (e.g. channels focused differently) and the higher\nphoton noise of bright regions look like spots to a global cut-off.\nOutput Significance divides the residual by its local noise, so a\ncut-off (e.g. 5 in a threshold) means the same everywhere.\n\nMeasures per image: the factor, offset, shift, alignment quality, R²,\nthe parts of fit and saturated pixels, whether a fallback was used (for\nthe shift or the factor) and with Sharpness Auto the extra blurs used (on an image split into tiles: the median over the\ntiles). Exclude\nImage can leave images out by them - e.g. \"Fallback used\" above 0.5.\n\nRuns per tile, the whole image up to 4096 px: on a larger image each\ntile has its own estimates for now (Image scope logs a warning), and the\nshift pads the tile borders with their edge pixels (no overlap with the\nneighbouring tiles).\n\nThe EV-in-serum assay - spots in the current image, the serum channel 4,\neverything else at its default:\n\n```json\n{ \"type\": \"SUBTRACT_REFERENCE_CHANNEL\", \"id\": \"reference\", \"referenceChannel\": 4 }\n```",
+      "type": "object",
+      "properties": {
+        "alignment": {
+          "description": "How the reference is shifted onto the target.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelAlignmentSettings",
+          "default": {
+            "fallbackDx": 0.0,
+            "fallbackDy": 0.0,
+            "maxShift": 5.0,
+            "minQuality": 0.30000001192092896,
+            "type": "AUTO"
+          }
+        },
+        "background": {
+          "description": "Slowly varying background, removed from both channels.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelBackgroundSettings",
+          "default": {
+            "radius": 30.0,
+            "type": "MEDIAN"
+          }
+        },
+        "cameraOffset": {
+          "description": "Camera offset subtracted from target and reference before anything\nelse.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelCameraOffsetSettings",
+          "default": {
+            "type": "NONE"
+          }
+        },
+        "clipNegative": {
+          "description": "Set negative residual values to 0.",
+          "type": "boolean",
+          "default": true
+        },
+        "edgeTolerance": {
+          "description": "Local maximum of the reference over this radius (px) before\nsubtracting; tolerates a small leftover shift or edge mismatch (0 =\noff).",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 10,
+          "minimum": 0
+        },
+        "estimationScope": {
+          "description": "Area the estimates (shift, factor) are computed over.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelEstimationScopeSettings",
+          "default": "IMAGE"
+        },
+        "factor": {
+          "description": "How the scale factor `a` is set.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelFactorSettings",
+          "default": {
+            "fallback": 0.0,
+            "fitOffset": true,
+            "maxUncertainty": 0.25,
+            "maxValue": 100.0,
+            "minPercentile": 50.0,
+            "minValue": 0.0,
+            "noiseFactor": 4.0,
+            "outlierK": 3.0,
+            "type": "ROBUST_FIT"
+          }
+        },
+        "factorScale": {
+          "description": "Multiplies `a` after it is set (fine tuning, 1 = unchanged).",
+          "type": "number",
+          "format": "float",
+          "default": 1.0,
+          "maximum": 100,
+          "minimum": 0
+        },
+        "id": {
+          "description": "Names the step's measurements (factor, shift, …) in the results.",
+          "type": "string",
+          "default": ""
+        },
+        "interpolation": {
+          "description": "Interpolation for the shift.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelShiftInterpolationSettings",
+          "default": "CUBIC"
+        },
+        "onlyBrighterReference": {
+          "description": "Subtract only where the reference is brighter than its background\n(after the background is removed): dark lines or holes in the\nreference (cracks, gaps) subtract nothing instead of brightening the\nresult. Off: the reference's dips are subtracted too. Needs a\nbackground removal - without one the reference is never below 0.",
+          "type": "boolean",
+          "default": true
+        },
+        "output": {
+          "description": "Output: the residual, or the scaled aligned reference (for\ninspection).",
+          "$ref": "#/$defs/MathSubtractReferenceChannelOutputImageSettings",
+          "default": "RESIDUAL"
+        },
+        "referenceChannel": {
+          "description": "Channel containing only the signal to remove.",
+          "$ref": "#/$defs/ImageChannelIdx",
+          "default": 1
+        },
+        "referenceExtraSigma": {
+          "description": "Extra blur (σ, px) for the reference if it is sharper than the\ntarget (0 = off). With Sharpness Auto: used when no estimate is\nmade.",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 20,
+          "minimum": 0
+        },
+        "saturation": {
+          "description": "Pixels at or above this level (in either channel) are left out of\nall estimates - and their neighbours as far as the blurs and the\nshift reach.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelSaturationSettings",
+          "default": {
+            "type": "AUTO"
+          }
+        },
+        "sharpness": {
+          "description": "How the sharper channel is blurred to the other's sharpness before\nthe fit: by the extra blurs set below, or estimated per image.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelSharpnessSettings",
+          "default": {
+            "type": "MANUAL"
+          }
+        },
+        "smoothingSigma": {
+          "description": "Gaussian smoothing (σ, px) applied identically to both channels (0 =\noff).",
+          "type": "number",
+          "format": "float",
+          "default": 1.0,
+          "maximum": 20,
+          "minimum": 0
+        },
+        "target": {
+          "description": "Image to correct: the current pipeline image, or a channel.",
+          "$ref": "#/$defs/MathSubtractReferenceChannelTargetSourceSettings",
+          "default": {
+            "type": "CURRENT_IMAGE"
+          }
+        },
+        "targetExtraSigma": {
+          "description": "Extra blur (σ, px) for the target if it is sharper than the\nreference (0 = off). With Sharpness Auto: used when no estimate is\nmade.",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 20,
+          "minimum": 0
+        }
+      }
+    },
     "ThresholdEntrySettings": {
       "description": "Configuration for a single thresholding operation within a multi-threshold stack.",
       "type": "object",
@@ -4641,9 +6029,14 @@
       }
     },
     "ThresholdSettings": {
-      "description": "A filter that segments an image into discrete classes based on intensity.\n\nThis supports \"Multi-Otsu\" style behavior by allowing several\nthresholds. Each pixel is evaluated against them to determine which\nsegmentation class it belongs to.",
+      "description": "A filter that segments an image into discrete classes based on intensity.\n\nThis supports \"Multi-Otsu\" style behavior by allowing several\nthresholds. Each pixel is evaluated against them to determine which\nsegmentation class it belongs to.\n\nMeasures per image the lower threshold each entry used - computed by an\nautomatic method or set by hand, in the entry's unit - so images whose\nthreshold is off can be found (and left out with Exclude Image). On an\nimage split into tiles: the median over the tiles.",
       "type": "object",
       "properties": {
+        "id": {
+          "description": "Names the step's measurements (the thresholds used) in the results.\nEmpty (a threshold a script or another command runs): nothing is\nmeasured.",
+          "type": "string",
+          "default": ""
+        },
         "thresholds": {
           "description": "A list of thresholding layers. Overlapping ranges are resolved\nby the order of the vector (last-in priority).",
           "type": "array",
@@ -4955,8 +6348,48 @@
         }
       }
     },
+    "TranslateImageSettings": {
+      "description": "Shifts the image by a fraction of a pixel; it keeps its size.\n\nPositive `dy` moves the content down, positive `dx` to the right:\n`output(y, x) = input(y − dy, x − dx)` - as `scipy.ndimage.shift`, so\nshifts measured in Python can be used as they are. The strip the shift\nempties at the edge is filled as set under Padding. A volume is shifted\nplane by plane; a colour image the same in every colour.\n\nCubic is Keys' cubic convolution with a = −0.5 (Catmull-Rom). Whole-pixel\nshifts copy the pixels, whatever the interpolation. Label images can\nonly be shifted with Nearest.\n\nRuns per tile: on an image split into tiles (larger than 4096 px) the\npadding also fills the strip at the inner tile borders - as wide as the\nshift.\n\nA fixed channel shift as a step of a module:\n\n```json\n{ \"id\": 2, \"enabled\": true,\n\"command\": { \"type\": \"TRANSLATE_IMAGE\", \"dy\": 0.5, \"dx\": -1.25,\n\"interpolation\": \"CUBIC\", \"padding\": \"REPLICATE\", \"padValue\": 0.0 } }\n```",
+      "type": "object",
+      "properties": {
+        "dx": {
+          "description": "Shift right (+) or left (−) in pixels; fractions allowed.",
+          "type": "number",
+          "format": "double",
+          "default": 0.0,
+          "maximum": 1000,
+          "minimum": -1000
+        },
+        "dy": {
+          "description": "Shift down (+) or up (−) in pixels; fractions allowed.",
+          "type": "number",
+          "format": "double",
+          "default": 0.0,
+          "maximum": 1000,
+          "minimum": -1000
+        },
+        "interpolation": {
+          "description": "How pixel values between grid positions are computed.",
+          "$ref": "#/$defs/SpartialTransformTranslateImageInterpolationSettings",
+          "default": "LINEAR"
+        },
+        "padValue": {
+          "description": "Fill value for padding = Constant.",
+          "type": "number",
+          "format": "float",
+          "default": 0.0,
+          "maximum": 65535,
+          "minimum": -65535
+        },
+        "padding": {
+          "description": "What fills the strip that the shift empties at the image edge.",
+          "$ref": "#/$defs/SpartialTransformTranslateImagePaddingSettings",
+          "default": "REPLICATE"
+        }
+      }
+    },
     "UNetSettings": {
-      "description": "Semantic segmentation using a pretrained U-Net exported as TorchScript.\n\nThe model is expected to accept a `[1, 1, H, W]` float tensor (single-channel,\nsame normalization as the rest of the pipeline) and return either a\n`[1, 1, H, W]` tensor of per-pixel foreground probabilities (the model already\napplies its final sigmoid) or a `[1, C, H, W]` tensor with more than one\nchannel, in which case `output_mode` and `foreground_channel` decide how the\nforeground probability is extracted. Runs on GPU\nautomatically if CUDA is available in the linked libtorch build, otherwise\nfalls back to CPU.\n\nAny tile size works: the tile is mirror-padded to a multiple of 16 (U-Nets\nhalve the image 4 times and fail otherwise) plus a 16 px border (context\nfor the pixels at the tile edge, the \"halo\" bioimage.io models declare),\nand the prediction is cropped back to the tile.",
+      "description": "Semantic segmentation with a pretrained U-Net (torch-em `UNet2d`, the\narchitecture of bioimage.io's U-Nets), from an EVAnalyzer model file\n(`.evanet`, converted once from the original - `crates/nn`).\n\nThe model gives one or more channels per pixel: with one, its\nforeground probability; with more, `output_mode` and `foreground_channel`\ndecide how the foreground probability is taken. The model file says\nwhether the image is normalized first (zero mean, unit variance). Runs on\na GPU when there is one (convolutions in half precision there), else on\nthe CPU.\n\nAny tile size works: the tile is mirror-padded to the network's multiple\n(16 for depth 4) plus a 16 px border (context for the pixels at the tile\nedge, the \"halo\" bioimage.io models declare), and the prediction is\ncropped back to the tile.",
       "type": "object",
       "properties": {
         "boundaryChannel": {
@@ -4984,9 +6417,16 @@
           "minimum": 0
         },
         "modelPath": {
-          "description": "Path to a TorchScript-exported U-Net model (`torch.jit.script`/`torch.jit.trace`).",
+          "description": "The U-Net model file (EVAnalyzer's `.evanet` or `.safetensors`).",
           "type": "string",
           "default": ""
+        },
+        "normalization": {
+          "description": "How the image is scaled before the model sees it: by default as the\nmodel file says (e.g. zero mean, unit variance over the tile).",
+          "$ref": "#/$defs/AiSegmentationInputNormalizationInputNormalizationSettings",
+          "default": {
+            "type": "MODEL_DEFAULT"
+          }
         },
         "outputMode": {
           "description": "How to interpret the model output when it has more than one channel.\nIgnored for single-channel outputs.",
@@ -5166,6 +6606,46 @@
         }
       }
     },
+    "WaveletSpotsSettings": {
+      "description": "Enhances spots by combining several levels of detail: keeps what stands\nout of the noise at each level from `first_level` to `levels`.\n\n[Wavelet Spots] -> [Find Maxima] -> [Extract Objects]\n\nThe result is positive at bright spots and exactly 0 everywhere else\n(background, dark spots, what stands out at one level only). With output\nProduct it is the paper's multiscale product: the image's intensities to\nthe power of the number of combined levels, so a manual cut-off in Find\nMaxima is the paper's detection level in these units. With output\nIntensity it is in the image's units. Measure intensities on the\noriginal channel, not on this image.",
+      "type": "object",
+      "properties": {
+        "firstLevel": {
+          "description": "The finest level that is combined; the levels below are skipped.\nLevel 1 is mostly noise: 2 gives fewer false spots for spots of 4 px\nand more. At most `levels`.",
+          "type": "integer",
+          "format": "uint",
+          "default": 1,
+          "maximum": 5,
+          "minimum": 1
+        },
+        "levels": {
+          "description": "How many levels are computed: level i holds details of about 2^i\npixels, so 3 suits spots up to about 8 px.",
+          "type": "integer",
+          "format": "uint",
+          "default": 3,
+          "maximum": 5,
+          "minimum": 2
+        },
+        "noise": {
+          "description": "How the noise of each level is estimated.",
+          "$ref": "#/$defs/FiltersWaveletSpotsWaveletNoiseSettings",
+          "default": "PER_LEVEL"
+        },
+        "noiseFactor": {
+          "description": "A level counts at a pixel only where it is at least this many times\nits noise; 3 in the paper.",
+          "type": "number",
+          "format": "float",
+          "default": 3.0,
+          "maximum": 20,
+          "minimum": 0
+        },
+        "output": {
+          "description": "The unit of the result.",
+          "$ref": "#/$defs/FiltersWaveletSpotsWaveletOutputSettings",
+          "default": "PRODUCT"
+        }
+      }
+    },
     "WeightedDeviationSettings": {
       "description": "A filter that computes the Gaussian-weighted standard deviation of a local neighborhood.\n\nUnlike a standard deviation filter which treats all pixels in a window equally,\nthe Weighted Deviation uses a Gaussian kernel to give more importance to\npixels closer to the center. This is particularly effective for edge-preserving\nnoise analysis and local contrast enhancement.\n\nThis algorithm evaluates local variance by calculating two distinct Gaussian-blurred\nbaselines across the image: the weighted average of the pixel intensities, and the\nweighted average of the squared intensities. By subtracting the squared mean from\nthe mean of squares, it yields a localized, smooth statistical variance map that\nhighlights micro-textures and subtle surface boundaries without producing blocky artifacts.",
       "type": "object",
@@ -5186,92 +6666,6 @@
         "kernelSize",
         "sigma"
       ]
-    },
-    "YoloClassMappingSettings": {
-      "description": "Which project segmentation class the objects of one model class get.",
-      "type": "object",
-      "properties": {
-        "modelClass": {
-          "description": "Index of the class in the model (`0` = its first class).",
-          "type": "integer",
-          "format": "int32",
-          "default": 0,
-          "maximum": 1000,
-          "minimum": 0
-        },
-        "segmentationClass": {
-          "description": "The project's segmentation class objects of `model_class` are written as.",
-          "$ref": "#/$defs/SegmentationClass",
-          "default": 1
-        }
-      }
-    },
-    "Yolov5Settings": {
-      "description": "Instance segmentation (or detection) with a YOLOv5 model exported as TorchScript.\n\n[AI YOLOv5 Segmentation] -> [Extract Objects]\n\nTakes a YOLOv5 TorchScript export (`export.py --include torchscript`) with\na fixed 640x640 input. Segmentation models (`yolov5*-seg`) give every\nobject its mask; plain detection models give filled boxes. Any number of\nmodel classes is supported.\n\nTiles larger than 640 px are analyzed in overlapping 640x640 windows at\nfull resolution (small tiles are padded), so small objects stay\ndetectable; objects seen by several windows are merged. Gray images are\ngiven to the model as RGB with equal channels.",
-      "type": "object",
-      "properties": {
-        "classMapping": {
-          "description": "Maps the model's classes to this project's segmentation classes;\nobjects of classes not listed are dropped. Leave empty to write model\nclass `i` as segmentation class `i + 1`, for every class.",
-          "type": "array",
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/YoloClassMappingSettings"
-          }
-        },
-        "confidenceThreshold": {
-          "description": "Minimum confidence (objectness x class score) of a detection.",
-          "type": "number",
-          "format": "float",
-          "default": 0.25,
-          "maximum": 1,
-          "minimum": 0
-        },
-        "imageScale": {
-          "description": "Factor the image is scaled by before it is given to the model, the\nmasks are scaled back afterwards. Use it when the model was trained on\ndownscaled images: `640 / training image size`, e.g. `0.3125` for\n2048 px images YOLOv5 shrank to 640. `1` = full resolution.",
-          "type": "number",
-          "format": "float",
-          "default": 1.0,
-          "maximum": 4,
-          "minimum": 0.05
-        },
-        "iouThreshold": {
-          "description": "Detections of the same class overlapping more than this (box\nintersection over union) are merged into the more confident one.",
-          "type": "number",
-          "format": "float",
-          "default": 0.44999998807907104,
-          "maximum": 1,
-          "minimum": 0
-        },
-        "maskThreshold": {
-          "description": "Mask probability above which a pixel belongs to its object\n(segmentation models only).",
-          "type": "number",
-          "format": "float",
-          "default": 0.5,
-          "maximum": 1,
-          "minimum": 0
-        },
-        "minObjectSize": {
-          "description": "Objects with fewer pixels than this (after overlapping objects were\nresolved) are removed. `0` keeps every object.",
-          "type": "integer",
-          "format": "int32",
-          "default": 15,
-          "maximum": 100000,
-          "minimum": 0
-        },
-        "modelPath": {
-          "description": "Path to a YOLOv5 model exported as TorchScript.",
-          "type": "string",
-          "default": ""
-        },
-        "windowOverlap": {
-          "description": "Overlap of neighboring 640x640 windows, in pixels. Must be larger\nthan the biggest object, so every object lies completely inside some\nwindow.",
-          "type": "integer",
-          "format": "int32",
-          "default": 128,
-          "maximum": 512,
-          "minimum": 0
-        }
-      }
     }
   }
 }

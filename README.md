@@ -16,7 +16,7 @@ suffix is this extension's convention, so those files get validation without
 the extension claiming every `.json` file.
 
 <!-- evanalyzer-schema-version:start -->
-Schemas last synced from evanalyzer branch [ai-plugin](https://github.com/evanalyzer/evanalyzer/tree/ai-plugin) (53d123b4, unreleased).
+Schemas last synced from evanalyzer [1.0.0-alpha.10](https://github.com/evanalyzer/evanalyzer/releases/tag/1.0.0-alpha.10).
 <!-- evanalyzer-schema-version:end -->
 
 ## What it does
